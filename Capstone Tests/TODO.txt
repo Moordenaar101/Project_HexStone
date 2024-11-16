@@ -19,3 +19,5 @@ TODO:
     - Stop/Start
     - Tilt/Look
     - Static animations
+
+Learn Git Stuffs
