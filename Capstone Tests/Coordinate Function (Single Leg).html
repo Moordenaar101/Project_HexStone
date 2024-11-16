@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Cube Test</title>
+		<link rel="stylesheet" href="styling.css" />
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "../build/three.module.js",
+					"ImportControls": "/examples/jsm/controls/OrbitControls.js",
+					"ImportMath": "/src/math/MathUtils.js",
+					"three/addons/": "../examples/jsm/",
+					"ImportMeshline": "../THREE.MeshLine-master/THREE.MeshLine-master/src/THREE.MeshLine.js"
+				}
+			}
+		</script>
+
+		<script type="module">
+			// ------------------------------------------------
+			// BASIC SETUP
+			// ------------------------------------------------
+
+			import * as THREE from "three";
+			import { OrbitControls } from "ImportControls";
+			import { MathUtils } from "ImportMath";
+
+			// Create an empty scene
+			let scene = new THREE.Scene();
+
+			// Create a basic perspective camera
+			let camera = new THREE.PerspectiveCamera(
+				75,
+				window.innerWidth / window.innerHeight,
+				0.1,
+				1000
+			);
+			camera.position.z = 25;
+
+			// Create a renderer with Antialiasing
+			let renderer = new THREE.WebGLRenderer({ antialias: true });
+
+			// Configure renderer clear color
+			renderer.setClearColor("#000000");
+
+			// Configure renderer size
+			renderer.setSize(window.innerWidth, window.innerHeight);
+
+			// Append Renderer to DOM
+			document.body.appendChild(renderer.domElement);
+
+			const controls = new OrbitControls(camera, renderer.domElement);
+
+			// ------------------------------------------------
+			// Leg Paramerters
+			// ------------------------------------------------
+
+			// shapes
+			let femur, tibia, hip, knee, foot, endPoint, base;
+			let femurLen = 5;
+			let tibiaLen = 5;
+			let endPointDia = 0.1;
+			let jointDia = 0.5;
+			let legDia = 0.25;
+
+			// ------------------------------------------------
+			// FUN STARTS HERE
+			// ------------------------------------------------
+
+			const light1 = new THREE.AmbientLight({ color: "#ffffff" });
+			const light2 = new THREE.DirectionalLight({ color: "#ffffff" }, 5);
+			light2.position.set(3, 9, 0);
+
+			// Shapes
+
+			let baseGeometry = new THREE.CylinderGeometry(
+				jointDia * 1.5,
+				jointDia * 1.5,
+				jointDia * 2.5,
+				32
+			);
+			let baseMaterial = new THREE.MeshPhongMaterial({ color: "yellow" });
+			base = new THREE.Mesh(baseGeometry, baseMaterial);
+
+			let endPointGeo = new THREE.SphereGeometry(jointDia * 0.125, 32, 16);
+			let endPointMat = new THREE.MeshPhongMaterial({ color: "green" });
+			endPoint = new THREE.Mesh(endPointGeo, endPointMat);
+
+			let hipGeometry = new THREE.CylinderGeometry(
+				jointDia,
+				jointDia,
+				jointDia * 2,
+				32
+			).rotateX(Math.PI * 0.5);
+			let hipMaterial = new THREE.MeshPhongMaterial({ color: "red" });
+			hip = new THREE.Mesh(hipGeometry, hipMaterial);
+
+			let kneeGeometry = new THREE.CylinderGeometry(
+				jointDia,
+				jointDia,
+				jointDia * 2,
+				32
+			).rotateX(Math.PI * 0.5);
+
+			let kneeMaterial = new THREE.MeshPhongMaterial({ color: "blue" });
+			knee = new THREE.Mesh(kneeGeometry, kneeMaterial);
+
+			let footGeometry = new THREE.CylinderGeometry(
+				jointDia,
+				jointDia,
+				jointDia * 2,
+				32
+			).rotateX(Math.PI * 0.5);
+			let footMaterial = new THREE.MeshPhongMaterial({ color: "blue" });
+			foot = new THREE.Mesh(footGeometry, footMaterial);
+
+			let femurGeometry = new THREE.CylinderGeometry(
+				legDia,
+				legDia,
+				femurLen,
+				32
+			).rotateX(Math.PI * 0.5);
+			let femurMaterial = new THREE.MeshPhongMaterial({ color: "purple" });
+			femur = new THREE.Mesh(femurGeometry, femurMaterial);
+
+			let tibiaGeometry = new THREE.CylinderGeometry(
+				legDia,
+				legDia * 0.5,
+				tibiaLen,
+				32
+			).rotateX(Math.PI * 0.5);
+			let tibiaMaterial = new THREE.MeshPhongMaterial({ color: "purple" });
+			tibia = new THREE.Mesh(tibiaGeometry, tibiaMaterial);
+
+			const lowerSection = new THREE.Group();
+			const midSection = new THREE.Group();
+			const highSection = new THREE.Group();
+
+			highSection.add(foot, tibia);
+			midSection.add(hip, knee, femur, highSection);
+			lowerSection.add(base, midSection);
+
+			// Aligning shapes
+
+			endPoint.position.set(5, -2, 0);
+
+			knee.position.x = 5;
+
+			foot.position.x = 5;
+
+			femur.position.set(5 / 2, 0, 0);
+			femur.lookAt(hip.position);
+
+			tibia.position.set(5 / 2, 0, 0);
+
+			highSection.position.set(5, 0, 0);
+
+			tibia.lookAt(foot.position);
+
+			midSection.position.y = 1;
+
+			// Add objects to Scene
+			scene.add(light1);
+			scene.add(light2);
+			scene.add(lowerSection);
+			scene.add(endPoint);
+
+			// Function to move leg
+
+			const move = function (v) {
+				let hipWorldPos = new THREE.Vector3();
+
+				hip.getWorldPosition(hipWorldPos);
+
+				if (v.distanceTo(hipWorldPos) > femurLen + tibiaLen) {
+					console.log("Too Far!");
+					console.log("Old V:", v.distanceTo(hipWorldPos));
+					v.lerp(
+						hipWorldPos,
+						(1 - (femurLen + tibiaLen) / v.distanceTo(hipWorldPos)) * 1.001
+					);
+					console.log("New V:", v.distanceTo(hipWorldPos));
+				}
+				let worldPos = new THREE.Vector3();
+				foot.getWorldPosition(worldPos);
+				endPoint.position.lerp(worldPos, 1);
+
+				hip.getWorldPosition(worldPos);
+				// console.log("World Pos:", worldPos);
+
+				let l = worldPos.distanceTo(v);
+
+				let j3 = Math.acos((5 * 5 + 5 * 5 - l * l) / (2 * (5 * 5)));
+
+				let z = worldPos.y - v.y;
+				// console.log("Z:", z);
+
+				let h = v.x - worldPos.x;
+				// console.log("H:", h);
+
+				let a = Math.atan(z / h);
+				// console.log("A°:", THREE.MathUtils.radToDeg(a));
+
+				let b = Math.acos((l * l + 5 * 5 - 5 * 5) / (2 * l * 5));
+				// console.log("B°:", THREE.MathUtils.radToDeg(b));
+
+				let j2 = b - a;
+				// console.log("j2°:", THREE.MathUtils.radToDeg(j2));
+
+				midSection.rotation.z = j2;
+
+				highSection.rotateZ(Math.PI);
+				highSection.rotation.z = j3 - Math.PI;
+
+				// let temp = new THREE.Vector3();
+				// knee.getWorldPosition(temp);
+				// console.log("S2 Final Pos:", temp);
+				// foot.getWorldPosition(temp);
+				// console.log("S3 Final Pos:", temp);
+			};
+
+			const gate = function (mode) {
+				// Todo
+			};
+
+			let here = new THREE.Vector3(3, 0, 0);
+			let flip1 = false;
+			let flip2 = false;
+			let xOffset = 1;
+			let yOffset = 1;
+
+			lowerSection.position.set(-10, -10, 0);
+
+			// Render Loop
+			let render = function () {
+				requestAnimationFrame(render);
+
+				if (yOffset >= 200) {
+					flip1 = true;
+				} else if (yOffset <= -200) {
+					flip1 = false;
+				}
+
+				if (flip1) {
+					yOffset -= 0.05;
+				} else {
+					yOffset += 0.05;
+				}
+
+				if (here.x >= 220) {
+					flip2 = true;
+				} else if (here.x <= 1) {
+					flip2 = false;
+				}
+
+				if (flip2) {
+					xOffset -= 0.03;
+				} else {
+					xOffset += 0.025;
+				}
+
+				here.x = 1 + Math.cos(xOffset) * Math.cos(xOffset) * 6;
+				here.y = 1 + Math.cos(yOffset) * 6.5;
+
+				move(here);
+
+				// Render the scene
+				renderer.render(scene, camera);
+			};
+
+			render();
+		</script>
+	</head>
+	<body></body>
+</html>

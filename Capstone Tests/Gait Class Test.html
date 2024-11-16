@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Hexapod</title>
+		<link rel="stylesheet" href="styling.css" />
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "../build/three.module.js",
+					"ImportControls": "../examples/jsm/controls/OrbitControls.js",
+					"ImportMath": "../src/math/MathUtils.js",
+					"three/addons/": "../examples/jsm/",
+					"ImportMeshline": "../THREE.MeshLine-master/THREE.MeshLine-master/src/THREE.MeshLine.js"
+				}
+			}
+		</script>
+
+		<script type="module">
+			// ------------------------------------------------
+			// BASIC SETUP
+			// ------------------------------------------------
+
+			import * as THREE from "three";
+			import { OrbitControls } from "ImportControls";
+			import { MathUtils } from "ImportMath";
+			import { GUI } from "three/addons/libs/lil-gui.module.min.js";
+
+			let camera, scene, renderer;
+
+			init();
+
+			// ------------------------------------------------
+			// General Global Variables
+			// ------------------------------------------------
+
+			let debug = false; // Enable to print Debug info to console
+
+			// ------------------------------------------------
+			// Global Paramerters
+			// ------------------------------------------------
+
+			// Initialize leg parameters and variables
+			let femur, tibia, hip, knee, foot, endPoint, pivot;
+			let femurLen = 5;
+			let tibiaLen = 5;
+			let numLegs = 6;
+			let legGroups = [],
+				legParts = [],
+				goals = [];
+			let hipStance = [
+				[12, 10],
+				[18, 0],
+				[12, -10],
+			];
+
+			// Runtime Variables
+			let hipWorldPos;
+			let goalWorldPos = [0, 0, 0, 0, 0, 0];
+			let jointAngles = [];
+
+			// ------------------------------------------------
+			// Setup Functions
+			// ------------------------------------------------
+
+			function init() {
+				// Initialize the camera, scene, and renderer
+				camera = new THREE.PerspectiveCamera(
+					75,
+					window.innerWidth / window.innerHeight,
+					0.1,
+					1000
+				);
+				camera.position.x = -15;
+				camera.position.y = 25;
+				camera.position.z = 45;
+
+				scene = new THREE.Scene();
+
+				renderer = new THREE.WebGLRenderer({ antialias: true });
+				renderer.setPixelRatio(window.devicePixelRatio);
+				renderer.setClearColor("#2c354d");
+				renderer.setSize(window.innerWidth, window.innerHeight);
+				document.body.appendChild(renderer.domElement);
+
+				const controls = new OrbitControls(camera, renderer.domElement);
+
+				window.addEventListener("resize", onWindowResize);
+
+				setupScene();
+				setupControlPannel();
+
+				console.clear();
+			}
+
+			function onWindowResize() {
+				// Updates window aspect ratio on resize
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize(window.innerWidth, window.innerHeight);
+			}
+
+			function setupScene() {
+				// Setup for all Enviromental Features
+				const light1 = new THREE.AmbientLight({ color: "#ffffff" });
+				const light2 = new THREE.DirectionalLight({ color: "#ffffff" }, 5);
+				light2.position.set(3, 9, 0);
+
+				scene.add(light1);
+				scene.add(light2);
+
+				const size = 100;
+				const divisions = 100;
+				const gridColor = new THREE.Color("rgb(75, 75, 75)");
+				const centerColor = new THREE.Color("rgb(75, 25, 50)");
+
+				const gridHelper = new THREE.GridHelper(
+					size,
+					divisions,
+					centerColor,
+					gridColor
+				);
+				scene.add(gridHelper);
+
+				const axesHelper = new THREE.AxesHelper(5);
+				axesHelper.position.y += 0.005;
+				scene.add(axesHelper);
+			}
+
+			function setupControlPannel() {
+				// Initializes the Control Pannel
+				const panel = new GUI({ width: 310 });
+
+				let settings;
+
+				const folder1 = panel.addFolder("Visibility");
+				const folder2 = panel.addFolder("Motion");
+				const folder3 = panel.addFolder("Size Parameters");
+
+				settings = {
+					"Show Model": true,
+					"Show Goal": true,
+					"Animate Model": true,
+					"Chassis Height": 3.5,
+					"Step Length": 0,
+					"Step Height": 0,
+					"Joint Diameter": 0.5,
+					"Leg Diameter": 0.25,
+					"Endpoint Diameter": 0.1,
+				};
+
+				// const jointDia = 0.5;
+				// const legDia = 0.25;
+				// const endPointDia = 0.1;
+				// legGroups = [];
+				// legParts = [];
+				// let objectArray = [];
+				// let jointNames = [
+				// 	"Pivot",
+				// 	"Hip",
+				// 	"Femur",
+				// 	"Knee",
+				// 	"Tibia",
+				// 	"Foot",
+				// 	"Goal",
+				// ];
+
+				folder1.add(settings, "Show Model").onChange(toggleModel);
+				// folder1.add(settings, "Show Goal").onChange(toggleGoal);
+				folder2.add(settings, "Animate Model").onChange(toggleMotion);
+				folder2
+					.add(settings, "Chassis Height", 0, 10, 0.1)
+					.listen()
+					.onChange(function (val) {
+						chassisHeight = val;
+						for (let i = 0; i < 6; i++) {
+							legGroups[i][2].position.y = chassisHeight;
+						}
+					});
+				folder2
+					.add(settings, "Step Length", -5, 5, 0.1)
+					.listen()
+					.onChange(function (val) {
+						rippleGait.stepDis = val;
+					});
+				folder2
+					.add(settings, "Step Height", -5, 5, 0.1)
+					.listen()
+					.onChange(function (val) {
+						rippleGait.stepHeight = val;
+					});
+				folder3
+					.add(settings, "Joint Diameter", 0.1, 5, 0.1)
+					.onChange(setJointDiameter);
+				folder3
+					.add(settings, "Leg Diameter", 0.1, 5, 0.1)
+					.onChange(setLegDiameter);
+				// folder3
+				// 	.add(settings, "Endpoint Diameter", 0.1, 2.5, 0.1)
+				// 	.onChange(setEndpointDiameter);
+
+				folder1.open();
+				folder2.open();
+			}
+
+			function toggleModel(visibility) {
+				for (let i = 0; i < 6; i++) {
+					legGroups[i][2].visible = visibility;
+				}
+			}
+
+			// function toggleGoal(visibility) {
+			// 	for (let i = 0; i < 6; i++) {
+			// 		legParts[i][6].visible = visibility;
+			// 		legParts[i][5].visible = !visibility;
+			// 	}
+			// }
+
+			function toggleMotion(motion) {
+				animateModel = motion;
+			}
+
+			function setJointDiameter(value) {
+				for (let i = 0; i < 6; i++) {
+					legParts[i][0].scale.set(value * 1.5, 1.25, value * 1.5);
+					legParts[i][1].scale.set(value, value, 1);
+					legParts[i][3].scale.set(value, value, 1);
+					legParts[i][5].scale.set(value, value, 1);
+				}
+			}
+
+			function setLegDiameter(value) {
+				for (let i = 0; i < 6; i++) {
+					legParts[i][2].scale.set(value, value);
+					legParts[i][4].scale.set(value, value);
+				}
+			}
+
+			// function setEndpointDiameter(value) {
+			// 	for (let i = 0; i < 6; i++) {
+			// 		legParts[i][6].scale.set(value, value, value);
+			// 	}
+			// }
+
+			// ------------------------------------------------
+			// FUN STARTS HERE
+			// ------------------------------------------------
+
+			// Control Pannel Variables
+			let modelVisibility = true;
+			let skeletonVisibility = false;
+			let animateModel = true;
+			let chassisHeight = 3.5;
+
+			// Legs
+			/*
+							 Back
+			           (5)         (0)
+			             \  _____  /
+			              \/     \/
+			         (4)___|     |___(1)
+			               |     |
+			              /\__↓__/\
+			             /         \
+			           (3)         (2)
+							Front
+			*/
+			// Parts:
+			// 0 = pivot
+			// 1 = hip
+			// 2 = femur
+			// 3 = knee
+			// 4 = tibia
+			// 5 = foot
+			// 6 = goal <-- Obsolete?
+
+			// Groups:
+			// legGroup[i][0] = (Tibia, Foot)
+			// legGroup[i][1] = (Hip, Femur, Knee, legGroup[i][0])
+			// legGroup[i][2] = (Pivot, legGroup[i][1])
+
+			function generateLegs(hipDis) {
+				// constants
+				const jointDia = 0.5;
+				const legDia = 0.25;
+				const endPointDia = 0.1;
+				legGroups = [];
+				legParts = [];
+				let objectArray = [];
+				let jointNames = ["Pivot", "Hip", "Femur", "Knee", "Tibia", "Foot"];
+
+				for (let i = 0; i < numLegs; i++) {
+					goals.push(new THREE.Vector3(2, -2, 0));
+					objectArray = [];
+
+					let pivotGeometry = new THREE.CylinderGeometry(1, 1, 1, 32);
+					let pivotMaterial = new THREE.MeshPhongMaterial({ color: "yellow" });
+					objectArray.push(new THREE.Mesh(pivotGeometry, pivotMaterial));
+
+					let hipGeometry = new THREE.CylinderGeometry(1, 1, 1, 32).rotateX(
+						Math.PI * 0.5
+					);
+					let hipMaterial = new THREE.MeshPhongMaterial({ color: "red" });
+					objectArray.push(new THREE.Mesh(hipGeometry, hipMaterial));
+
+					let femurGeometry = new THREE.CylinderGeometry(1, 1, 1, 32).rotateX(
+						Math.PI * 0.5
+					);
+					let femurMaterial = new THREE.MeshPhongMaterial({ color: "purple" });
+					objectArray.push(new THREE.Mesh(femurGeometry, femurMaterial));
+
+					let kneeGeometry = new THREE.CylinderGeometry(1, 1, 1, 32).rotateX(
+						Math.PI * 0.5
+					);
+
+					let kneeMaterial = new THREE.MeshPhongMaterial({ color: "blue" });
+					objectArray.push(new THREE.Mesh(kneeGeometry, kneeMaterial));
+
+					let tibiaGeometry = new THREE.CylinderGeometry(
+						0.85,
+						1,
+						1,
+						32
+					).rotateX(Math.PI * 0.5);
+					let tibiaMaterial = new THREE.MeshPhongMaterial({ color: "purple" });
+					objectArray.push(new THREE.Mesh(tibiaGeometry, tibiaMaterial));
+
+					let footGeometry = new THREE.CylinderGeometry(1, 1, 1, 32).rotateX(
+						Math.PI * 0.5
+					);
+					let footMaterial = new THREE.MeshPhongMaterial({ color: "blue" });
+					objectArray.push(new THREE.Mesh(footGeometry, footMaterial));
+
+					for (let h in objectArray) {
+						objectArray[h].name = jointNames[h] + " | Leg " + i.toString();
+					}
+
+					legParts[i] = objectArray;
+
+					legParts[i][0].scale.set(0.75, 1.25, 0.75);
+					legParts[i][1].scale.set(0.5, 0.5, 1);
+					legParts[i][2].scale.set(0.25, 0.25, 5);
+					legParts[i][3].scale.set(0.5, 0.5, 1);
+					legParts[i][4].scale.set(0.25, 0.25, 5);
+					legParts[i][5].scale.set(0.5, 0.5, 1);
+					// legParts[i][6].scale.set(0.25, 0.25, 0.25);
+
+					// legParts[i][6].visible = false;
+
+					let group0 = new THREE.Group();
+					let group1 = new THREE.Group();
+					let group2 = new THREE.Group();
+
+					group0.name = "Group 0 | Leg " + i.toString();
+					group1.name = "Group 1 | Leg " + i.toString();
+					group2.name = "Group 2 | Leg " + i.toString();
+
+					group0.add(legParts[i][4]);
+					group0.add(legParts[i][5]);
+					// group2.add(legParts[i][6]);
+					group0.position.x = femurLen;
+
+					group1.add(legParts[i][1]);
+					group1.add(legParts[i][2]);
+					group1.add(legParts[i][3]);
+					group1.add(group0);
+
+					group2.add(legParts[i][0]);
+					group2.add(group1);
+
+					legGroups[i] = [group0, group1, group2];
+
+					legGroups[i][1].position.y += hipDis;
+					// legGroups[i][1].position.x += 3; ToDo
+					legParts[i][2].position.x = femurLen / 2;
+					legParts[i][3].position.x = tibiaLen;
+
+					let tempPos = new THREE.Vector3();
+					legParts[i][3].getWorldPosition(tempPos);
+					legParts[i][2].lookAt(tempPos);
+
+					legParts[i][4].position.x = tibiaLen / 2;
+					legParts[i][5].position.x = tibiaLen;
+
+					legParts[i][5].getWorldPosition(tempPos);
+					legParts[i][4].lookAt(tempPos);
+
+					if (i > 2) {
+						legGroups[i][2].rotation.y += Math.PI;
+					}
+
+					scene.add(legGroups[i][2]);
+
+					if (i == 0) {
+						legGroups[i][2].position.set(
+							hipStance[0][0] / 2,
+							0,
+							hipStance[0][1]
+						);
+					} else if (i == 1) {
+						legGroups[i][2].position.set(
+							hipStance[1][0] / 2,
+							0,
+							hipStance[1][1]
+						);
+					} else if (i == 2) {
+						legGroups[i][2].position.set(
+							hipStance[2][0] / 2,
+							0,
+							hipStance[2][1]
+						);
+					} else if (i == 3) {
+						legGroups[i][2].position.set(
+							-hipStance[2][0] / 2,
+							0,
+							hipStance[2][1]
+						);
+					} else if (i == 4) {
+						legGroups[i][2].position.set(
+							-hipStance[1][0] / 2,
+							0,
+							hipStance[1][1]
+						);
+					} else if (i == 5) {
+						legGroups[i][2].position.set(
+							-hipStance[0][0] / 2,
+							0,
+							hipStance[0][1]
+						);
+					}
+
+					legGroups[i][2].position.y = chassisHeight;
+				}
+
+				/* ToDo calc actual values and update them constantly */
+
+				// let centerPointGeometry = new THREE.SphereGeometry(.5, 32, 32);
+				// let centerPointMaterial = new THREE.MeshPhongMaterial({
+				// 	color: "green",
+				// });
+				// let centerPoint = new THREE.Mesh(
+				// 	centerPointGeometry,
+				// 	centerPointMaterial
+				// );
+				// scene.add(centerPoint);
+			}
+
+			const getCurrentPos = function (index) {
+				let tempObjectPosition = new THREE.Vector3();
+				let currentObjectPositions = [];
+
+				for (let i = 0; i < 6; i++) {
+					legParts[i][index].position.copy(tempObjectPosition);
+					legParts[i][index].localToWorld(tempObjectPosition);
+					// console.log("Index:", index, "Position:", tempObjectPosition);
+					currentObjectPositions[i] = tempObjectPosition;
+				}
+				return currentObjectPositions;
+			};
+
+			// Function to move leg
+
+			const calcAngles = function () {
+				// Parts:
+				// 0 = pivot
+				// 1 = hip
+				// 2 = femur
+				// 3 = knee
+				// 4 = tibia
+				// 5 = foot
+				// 6 = goal
+
+				// Groups:
+				// legGroup[i][0] = (Tibia, Foot)
+				// legGroup[i][1] = (Hip, Femur, Knee, legGroup[i][0])
+				// legGroup[i][2] = (Pivot, legGroup[i][1])
+
+				// hipWorldPos = getCurrentPos(1);
+				// goalWorldPos = getCurrentPos(6);
+				let joint1; // 2
+				let joint2; // 0
+				let joint3; // 1
+
+				// console.log("Hip:", hipWorldPos, "\nGoal:", goalWorldPos);
+
+				for (let i = 0; i < numLegs; i++) {
+					let distanceCheck = goals[i].distanceTo(legParts[i][1].position);
+
+					if (distanceCheck > femurLen + tibiaLen) {
+						goals[i].lerp(
+							legParts[i][1].position,
+							1.00000001 - (femurLen + tibiaLen) / distanceCheck
+						);
+						// console.error(
+						// 	"Leg",
+						// 	i,
+						// 	"position out of bounds!\nWas: (",
+						// 	distanceCheck,
+						// 	")   Max: (",
+						// 	femurLen + tibiaLen,
+						// 	")"
+						// );
+					}
+
+					let xDistance = goals[i].x - legParts[i][1].position.x;
+					let zDistance = goals[i].z - legParts[i][1].position.z;
+					let rise = legParts[i][1].position.y - goals[i].y;
+					let h = Math.sqrt(xDistance * xDistance + zDistance * zDistance);
+
+					joint1 = Math.atan(zDistance / xDistance);
+
+					let hipToGoal = Math.sqrt(h * h + rise * rise);
+
+					let angleA = Math.atan(rise / h);
+
+					let angleB = Math.acos(
+						(hipToGoal * hipToGoal +
+							femurLen * femurLen -
+							tibiaLen * tibiaLen) /
+							(2 * hipToGoal * femurLen)
+					);
+
+					joint2 = angleB - angleA;
+
+					joint3 = Math.acos(
+						(femurLen * femurLen +
+							tibiaLen * tibiaLen -
+							hipToGoal * hipToGoal) /
+							(2 * femurLen * tibiaLen)
+					);
+
+					jointAngles[i] = [joint1, joint2, joint3];
+
+					// if (i == 0) {
+					// 	console.log(
+					// 		"A:",
+					// 		angleA * (180 / Math.PI),
+					// 		"\nB",
+					// 		angleB * (180 / Math.PI),
+					// 		"\nJ1:",
+					// 		joint1 * (180 / Math.PI),
+					// 		"\nJ2",
+					// 		joint2 * (180 / Math.PI),
+					// 		"\nJ3",
+					// 		joint3 * (180 / Math.PI),
+					// 		"\nChassis Height:",
+					// 		chassisHeight,
+					// 		"\nGoal:",
+					// 		goals[0],
+					// 		"\nX dis:",
+					// 		xDistance,
+					// 		"\nZ Dis:",
+					// 		zDistance,
+					// 		"\nH:",
+					// 		h
+					// 	);
+					// }
+				}
+			};
+
+			const updateAssembly = function () {
+				// console.log("Joint Angles:", jointAngles);
+				for (let i = 0; i < numLegs; i++) {
+					legGroups[i][0].rotation.z = jointAngles[i][2] - Math.PI;
+					legGroups[i][1].rotation.z = jointAngles[i][1];
+					if (i > 2) {
+						legGroups[i][2].rotation.y = -jointAngles[i][0] + Math.PI;
+					} else {
+						legGroups[i][2].rotation.y = jointAngles[i][0];
+					}
+				}
+			};
+
+			// const carDrive = function (mode) {
+			// 	switch (mode){
+			// 		case 0:
+			// 			console.log("Tri");
+			// 			break;
+
+			// 		case 1:
+			// 			console.log("Wave");
+			// 			break;
+
+			// 		default:
+			// 			console.log("default")
+			// 	}
+			// };
+
+			const cycleOffset = function (val, currentT) {
+				if (val + currentT > 1) {
+					val -= 1;
+					return val;
+				} else {
+					return val;
+				}
+			};
+
+			generateLegs(1);
+
+			for (let k = 0; k < 6; k++) {
+				// legParts[k][6].set(6, 0 - chassisHeight, 0);
+				goals[k].set(6, -1 - chassisHeight, 0);
+			}
+
+			let flip = true;
+			let count = 0;
+			calcAngles();
+			updateAssembly();
+
+			let start = new THREE.Vector3();
+			let end = new THREE.Vector3();
+			let control = new THREE.Vector3();
+			let calcX, calcY, calcZ;
+
+			start.set(6, -1 - chassisHeight, 6);
+			end.set(6, -1 - chassisHeight, -6);
+			control.set(6, 6, 0);
+
+			let cycle = [0, 0, 0, 0, 0, 0],
+				stance = [true, true, true, true, true, true];
+
+			// Tripod
+			// cycle[0] = 2 - (1 / 3) * 3 - 2;
+			// cycle[1] = 2 - (1 / 3) * 6 - 2;
+			// cycle[2] = 2 - (1 / 3) * 3 - 2;
+			// cycle[3] = 2 - (1 / 3) * 6 - 2;
+			// cycle[4] = 2 - (1 / 3) * 3 - 2;
+			// cycle[5] = 2 - (1 / 3) * 6 - 2;
+
+			// Ripple
+			// cycle[0] = 2 - (1 / 3) * 2 - 2;
+			// cycle[1] = 2 - (1 / 3) * 4 - 2;
+			// cycle[2] = 2 - (1 / 3) * 6 - 2;
+			// cycle[3] = 2 - (1 / 3) * 2 - 2;
+			// cycle[4] = 2 - (1 / 3) * 4 - 2;
+			// cycle[5] = 2 - (1 / 3) * 6 - 2;
+
+			// Wave
+			// cycle[0] = 2 - (1 / 3) * 1 - 2;
+			// cycle[1] = 2 - (1 / 3) * 2 - 2;
+			// cycle[2] = 2 - (1 / 3) * 3 - 2;
+			// cycle[3] = 2 - (1 / 3) * 4 - 2;
+			// cycle[4] = 2 - (1 / 3) * 5 - 2;
+			// cycle[5] = 2 - (1 / 3) * 6 - 2;
+
+			class Gait {
+				constructor(
+					name,
+					offsets,
+					maxSpeed,
+					stepDis,
+					stepHeight,
+					turnAngle,
+					straifeAngle,
+					speed
+				) {
+					this.name = name;
+					this.offsets = offsets;
+					this.maxSpeed = maxSpeed;
+					this.movable = [true, true, true, true, true, true];
+					this.onGround = [true, true, true, true, true, true];
+					this.centerPoint = new THREE.Vector3();
+					this.stabilityPolygon = [];
+
+					let tempArray = [];
+					let worldPos = new THREE.Vector3();
+
+					for (let i = 0; i < 6; i++) {
+						legParts[i][5].getWorldPosition(worldPos);
+						tempArray.push(new THREE.Vector2(worldPos.x, worldPos.z));
+					}
+					// console.log(tempArray);
+					this.stabShape = new THREE.Shape(tempArray);
+					this.stabShape.autoClose = true;
+					// console.log(this.stabShape);
+					this.stabGeo = new THREE.ShapeGeometry(this.stabShape);
+					this.stabGeo.name = "Stab Geo";
+
+					this.stabMaterial = new THREE.MeshBasicMaterial({
+						color: 0xff0000,
+						side: THREE.DoubleSide,
+						name: "Main Shape",
+					});
+					this.stabMesh = new THREE.Mesh(this.stabGeo, this.stabMaterial);
+					this.stabMesh.rotateX(-Math.PI / 2);
+					scene.add(this.stabMesh);
+					// console.log(this.stabMesh.geometry.attributes.position.array);
+					this.stable = true;
+					this.stepDis = stepDis;
+					this.stepHeight = stepHeight;
+					this.turnAngle = turnAngle;
+					this.straifeAngle = straifeAngle;
+					this.speed = speed;
+				}
+
+				walkCycle() {
+					for (let i = 0; i < 6; i++) {
+						this.offsets[i] += 0.01;
+						if (this.offsets[i] > 2) {
+							this.offsets[i] = 0;
+						}
+
+						if (this.offsets[i] <= 1 && this.movable[i] == true) {
+							this.onGround[i] = true;
+							calcX =
+								(1 - this.offsets[i]) * (1 - this.offsets[i]) * start.x +
+								2 * (1 - this.offsets[i]) * this.offsets[i] * control.x +
+								this.offsets[i] * this.offsets[i] * end.x;
+							calcY =
+								(1 - this.offsets[i]) *
+									(1 - this.offsets[i]) *
+									(-1 - chassisHeight) +
+								2 *
+									(1 - this.offsets[i]) *
+									this.offsets[i] *
+									(control.y + 1 * this.stepHeight) +
+								this.offsets[i] * this.offsets[i] * (-1 - chassisHeight);
+							calcZ =
+								(1 - this.offsets[i]) *
+									(1 - this.offsets[i]) *
+									(start.z + 1 * this.stepDis) +
+								2 * (1 - this.offsets[i]) * this.offsets[i] * control.z +
+								this.offsets[i] * this.offsets[i] * (end.z - 1 * this.stepDis);
+						} else {
+							this.onGround[i] = false;
+							calcX =
+								(this.offsets[i] - 1) * (this.offsets[i] - 1) * start.x +
+								2 *
+									(this.offsets[i] - 1) *
+									(1 - (this.offsets[i] - 1)) *
+									control.x +
+								(1 - (this.offsets[i] - 1)) *
+									(1 - (this.offsets[i] - 1)) *
+									end.x;
+							calcY = -1 - chassisHeight;
+							calcZ =
+								(this.offsets[i] - 1) *
+									(this.offsets[i] - 1) *
+									(start.z + 1 * this.stepDis) +
+								2 *
+									(this.offsets[i] - 1) *
+									(1 - (this.offsets[i] - 1)) *
+									control.z +
+								(1 - (this.offsets[i] - 1)) *
+									(1 - (this.offsets[i] - 1)) *
+									(end.z - 1 * this.stepDis);
+						}
+						goals[i].set(calcX, calcY, calcZ);
+					}
+					// console.log(this.onGround);
+				}
+
+				checkStability() {
+					let worldPos = new THREE.Vector3();
+
+					for (let i = 0; i < 6; i++) {
+						if (this.onGround[i] == true) {
+							legParts[i][5].getWorldPosition(worldPos);
+							this.stabilityPolygon.push(worldPos.x, 0, worldPos.z);
+						}
+					}
+
+					const numPoints = this.stabilityPolygon.length;
+
+					let p1 = this.stabilityPolygon[0];
+					let p2;
+
+					for (let i = 1; i <= numPoints; i++) {
+						p2 = this.stabilityPolygon[i % numPoints];
+
+						if (this.centerPoint.z > Math.min(p1[1], p2[1])) {
+							if (this.centerPoint.z <= Math.max(p1[1], p2[1])) {
+								if (this.centerPoint[0] <= Math.max(p1[0], p2[0])) {
+									const xIntersection =
+										((this.centerPoint.z - p1[0]) * (p2[1] - p1[1])) /
+											(p2[0] - p1[0]) +
+										p1[1];
+
+									if (p1[1] === p2[1] || this.centerPoint[0] <= xIntersection) {
+										this.stable = true;
+									} else {
+										this.stable = false;
+									}
+								}
+							}
+						}
+
+						p1 = p2;
+					}
+				}
+
+				VisualizeStability() {
+					let worldPos = new THREE.Vector3();
+					let lastPos = new THREE.Vector3();
+					let tempArray = [];
+
+					for (let i = 0; i < 6; i++) {
+						if (this.onGround[i] == true) {
+							legParts[i][5].getWorldPosition(worldPos);
+							tempArray.push(new THREE.Vector2(worldPos.x, worldPos.z));
+							lastPos.copy(worldPos);
+							for (let k = i; k < 5 + i; k++) {
+								if (this.onGround[((k % 6) + 6) % 6] == true) {
+									legParts[((k % 6) + 6) % 6][5].getWorldPosition(worldPos);
+									tempArray.push(new THREE.Vector2(worldPos.x, worldPos.z));
+									lastPos.copy(worldPos);
+								} else {
+									tempArray.push(
+										new THREE.Vector2(
+											lastPos.x + k * 0.01,
+											lastPos.z + k * 0.01
+										)
+									);
+								}
+							}
+							break;
+						}
+					}
+					let tempShape = new THREE.Shape(tempArray);
+					tempShape.autoClose = true;
+
+					let tempShapeGeometry = new THREE.ShapeGeometry(tempShape);
+					tempShapeGeometry.name = "Temp Shape Geometry";
+					// console.log(tempShapeGeometry);
+
+					this.stabMesh.geometry.attributes.position.array =
+						tempShapeGeometry.attributes.position.array;
+					this.stabMesh.geometry.attributes.position.needsUpdate = true;
+					// console.log(this.stabMesh.geometry.attributes.position.array);
+				}
+			}
+
+			// Copied Point in Polygon Algorithm
+			// class Point {
+			// 	constructor(x, y) {
+			// 		this.x = x;
+			// 		this.y = y;
+			// 	}
+			// }
+
+			// function point_in_polygon(point, polygon) {
+			// 	const num_vertices = polygon.length;
+			// 	const x = point.x;
+			// 	const y = point.y;
+			// 	let inside = false;
+
+			// 	let p1 = polygon[0];
+			// 	let p2;
+
+			// 	for (let i = 1; i <= num_vertices; i++) {
+			// 		p2 = polygon[i % num_vertices];
+
+			// 		if (y > Math.min(p1.y, p2.y)) {
+			// 			if (y <= Math.max(p1.y, p2.y)) {
+			// 				if (x <= Math.max(p1.x, p2.x)) {
+			// 					const x_intersection =
+			// 						((y - p1.y) * (p2.x - p1.x)) / (p2.y - p1.y) + p1.x;
+
+			// 					if (p1.x === p2.x || x <= x_intersection) {
+			// 						inside = !inside;
+			// 					}
+			// 				}
+			// 			}
+			// 		}
+
+			// 		p1 = p2;
+			// 	}
+
+			// 	return inside;
+			// }
+
+			// const point = new Point(150, 85);
+
+			// const polygon = [
+			// 	new Point(186, 14),
+			// 	new Point(186, 44),
+			// 	new Point(175, 115),
+			// 	new Point(175, 85),
+			// ];
+
+			// if (point_in_polygon(point, polygon)) {
+			// 	console.log("Point is inside the polygon");
+			// } else {
+			// 	console.log("Point is outside the polygon");
+			// }
+
+			const rippleGait = new Gait(
+				"ripple",
+				[
+					(2 / 6) * 2,
+					(2 / 6) * 4,
+					(2 / 6) * 6,
+					(2 / 6) * 2,
+					(2 / 6) * 4,
+					(2 / 6) * 6,
+				],
+				1,
+				0,
+				0,
+				0,
+				0,
+				1
+			);
+
+			// Render Loop
+			let render = function () {
+				requestAnimationFrame(render);
+
+				rippleGait.walkCycle();
+				rippleGait.checkStability();
+				rippleGait.VisualizeStability();
+
+				calcAngles();
+				updateAssembly();
+
+				// Render the scene
+				renderer.render(scene, camera);
+			};
+
+			render();
+		</script>
+	</head>
+</html>

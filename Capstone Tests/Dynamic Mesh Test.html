@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Hexapod</title>
+		<link rel="stylesheet" href="styling.css" />
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "../build/three.module.js",
+					"ImportControls": "../examples/jsm/controls/OrbitControls.js",
+					"ImportMath": "../src/math/MathUtils.js",
+					"three/addons/": "../examples/jsm/",
+					"ImportMeshline": "../THREE.MeshLine-master/THREE.MeshLine-master/src/THREE.MeshLine.js"
+				}
+			}
+		</script>
+
+		<script type="module">
+			// ------------------------------------------------
+			// BASIC SETUP
+			// ------------------------------------------------
+
+			import * as THREE from "three";
+			import { OrbitControls } from "ImportControls";
+			import { MathUtils } from "ImportMath";
+			import { GUI } from "three/addons/libs/lil-gui.module.min.js";
+
+			console.clear();
+
+			// Create an empty scene
+			let scene = new THREE.Scene();
+
+			// Create a basic perspective camera
+			let camera = new THREE.PerspectiveCamera(
+				75,
+				window.innerWidth / window.innerHeight,
+				0.1,
+				1000
+			);
+
+			camera.position.x = -5;
+			camera.position.y = 10;
+			camera.position.z = 25;
+
+			// Create a renderer with Antialiasing
+			let renderer = new THREE.WebGLRenderer({ antialias: true });
+
+			// Configure renderer clear color
+			renderer.setClearColor("#000000");
+
+			// Configure renderer size
+			renderer.setSize(window.innerWidth, window.innerHeight);
+
+			// Append Renderer to DOM
+			document.body.appendChild(renderer.domElement);
+
+			const controls = new OrbitControls(camera, renderer.domElement);
+
+			const light1 = new THREE.AmbientLight({ color: "#ffffff" });
+			const light2 = new THREE.DirectionalLight({ color: "#ffffff" }, 5);
+			light2.position.set(3, 9, 0);
+
+			scene.add(light1);
+			scene.add(light2);
+
+			const size = 100;
+			const divisions = 100;
+			const gridColor = new THREE.Color("rgb(75, 10, 50)");
+			const centerColor = new THREE.Color("rgb(25, 25, 25)");
+
+			const gridHelper = new THREE.GridHelper(
+				size,
+				divisions,
+				gridColor,
+				centerColor
+			);
+			scene.add(gridHelper);
+
+			// gridHelper.rotateX(Math.PI / 2);
+
+			const axesHelper = new THREE.AxesHelper(5);
+			axesHelper.position.y += 0.01;
+			// scene.add(axesHelper);
+
+			const clock = new THREE.Clock();
+
+			const panel = new GUI({ width: 310 });
+
+			let settings;
+
+			const folder1 = panel.addFolder("Controls");
+
+			settings = {
+				Animate: true,
+				PointB: true,
+			};
+
+			folder1.add(settings, "Animate").onChange(function (bool) {
+				animate = bool;
+			});
+			folder1.add(settings, "PointB").onChange(function (bool) {
+				enableB = bool;
+				pointB.setColor(bool);
+			});
+
+			class Point {
+				constructor(name, x, y, color) {
+					this.name = name;
+					this.x = x;
+					this.y = y;
+					this.color = color;
+
+					let geometry = new THREE.SphereGeometry(0.25, 32, 32);
+					let material = new THREE.MeshPhongMaterial({
+						color: this.color,
+						name: this.name,
+					});
+					let mesh = new THREE.Mesh(geometry, material);
+					mesh.position.set(x, y, 0);
+
+					this.mesh = mesh;
+
+					scene.add(this.mesh);
+				}
+				setColor(bool) {
+					if (bool) {
+						this.color = "blue";
+					} else {
+						this.color = "white";
+					}
+					this.mesh.material.color.set(this.color);
+				}
+			}
+
+			// Points:
+
+			let pointA = new Point("PointA", -5, 10, "red"),
+				pointB = new Point("PointB", 5, 10, "blue"),
+				pointC = new Point("PointC", 5, 0, "green"),
+				pointD = new Point("PointD", -5, 0, "purple");
+
+			let pointArray = [-5, 10, 5, 10, 5, 0, -5, 0];
+			let vectorArray = [];
+
+			for (let i = 0; i < 8; i += 2) {
+				vectorArray.push(new THREE.Vector2(pointArray[i], pointArray[i + 1]));
+			}
+
+			let shape = new THREE.Shape(vectorArray);
+			shape.autoClose = true;
+			let shapeGeo = new THREE.ShapeGeometry(shape);
+			shapeGeo.name = "Shape Geometry";
+			let shapeMat = new THREE.MeshBasicMaterial({
+				color: 0x777777,
+				side: THREE.DoubleSide,
+				name: "Connecting Mesh",
+			});
+			let shapeMesh = new THREE.Mesh(shapeGeo, shapeMat);
+
+			scene.add(shapeMesh);
+
+			let direction = true;
+			let animate = true;
+			let t = 0;
+			let enableB = true;
+
+			// Render Loop
+			let render = function () {
+				requestAnimationFrame(render);
+
+				if (animate) {
+					if (pointA.mesh.position.x > 0) {
+						direction = false;
+					} else if (pointA.mesh.position.x < -10) {
+						direction = true;
+					}
+					if (direction) {
+						t++;
+						pointA.mesh.position.x += 0.05;
+					} else {
+						t--;
+						pointA.mesh.position.x -= 0.05;
+					}
+
+					vectorArray = [];
+					vectorArray.push(
+						new THREE.Vector2(pointA.mesh.position.x, pointA.mesh.position.y)
+					);
+					vectorArray.push(
+						new THREE.Vector2(pointB.mesh.position.x, pointB.mesh.position.y)
+					);
+					vectorArray.push(
+						new THREE.Vector2(pointC.mesh.position.x, pointC.mesh.position.y)
+					);
+					vectorArray.push(
+						new THREE.Vector2(pointD.mesh.position.x, pointD.mesh.position.y)
+					);
+
+					let tempShape = new THREE.Shape(vectorArray);
+					let tempShapeGeometry = new THREE.ShapeGeometry(tempShape);
+
+					shapeMesh.geometry.attributes.position.array =
+						tempShapeGeometry.attributes.position.array;
+					shapeMesh.geometry.attributes.position.needsUpdate = true;
+
+					if (!enableB) {
+						pointB.mesh.position.lerpVectors(
+							pointA.mesh.position,
+							pointC.mesh.position,
+							0.5
+						);
+					} else {
+						pointB.mesh.position.set(
+							pointA.mesh.position.x + 10,
+							pointA.mesh.position.y,
+							0
+						);
+					}
+				}
+
+				// Render the scene
+				renderer.render(scene, camera);
+			};
+
+			render();
+		</script>
+	</head>
+	<body></body>
+</html>

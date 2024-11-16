@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Cube Test</title>
+		<link rel="stylesheet" href="styling.css" />
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "../build/three.module.js",
+					"ImportControls": "/examples/jsm/controls/OrbitControls.js",
+					"ImportMath": "/src/math/MathUtils.js"
+				}
+			}
+		</script>
+
+		<script type="module">
+			// ------------------------------------------------
+			// BASIC SETUP
+			// ------------------------------------------------
+
+			import * as THREE from "three";
+			import { OrbitControls } from "ImportControls";
+			import { MathUtils } from "ImportMath";
+
+			// Create an empty scene
+			var scene = new THREE.Scene();
+
+			// Create a basic perspective camera
+			var camera = new THREE.PerspectiveCamera(
+				75,
+				window.innerWidth / window.innerHeight,
+				0.1,
+				1000
+			);
+			camera.position.z = 15;
+
+			// Create a renderer with Antialiasing
+			var renderer = new THREE.WebGLRenderer({ antialias: true });
+
+			// Configure renderer clear color
+			renderer.setClearColor("#000000");
+
+			// Configure renderer size
+			renderer.setSize(window.innerWidth, window.innerHeight);
+
+			// Append Renderer to DOM
+			document.body.appendChild(renderer.domElement);
+
+			const controls = new OrbitControls(camera, renderer.domElement);
+
+			// ------------------------------------------------
+			// FUN STARTS HERE
+			// ------------------------------------------------
+
+			let j3Calc = new THREE.Vector3(0, 0, 0);
+			let j4Calc = new THREE.Vector3(0, 0, 0);
+			let flip = false;
+
+			const light1 = new THREE.AmbientLight({ color: "#ffffff" });
+			const light2 = new THREE.DirectionalLight({ color: "#ffffff" }, 5);
+			light2.position.set(0, 9, 0);
+
+			// Joint 1
+			let joint1pos = new THREE.Vector3(0, 0, 0);
+			var joint1Geometry = new THREE.CylinderGeometry(0.35, 0.35, 0.75, 32);
+			var joint1Material = new THREE.MeshPhongMaterial({ color: "yellow" });
+			var joint1 = new THREE.Mesh(joint1Geometry, joint1Material);
+			joint1.position.set(joint1pos.x, joint1pos.y, joint1pos.z);
+
+			// Joint 2
+			let joint2pos = new THREE.Vector3(0, 0.5, 0);
+			var joint2Geometry = new THREE.CylinderGeometry(0.25, 0.25, 0.5, 32);
+			var joint2Material = new THREE.MeshPhongMaterial({ color: "Red" });
+			var joint2 = new THREE.Mesh(joint2Geometry, joint2Material);
+			joint2.position.set(joint2pos.x, joint2pos.y, joint2pos.z);
+			joint2.rotation.set(Math.PI / 2, 0, 0);
+
+			// Joint 3
+			let joint3pos = new THREE.Vector3(-2, 2, 0);
+			var joint3Geometry = new THREE.CylinderGeometry(0.25, 0.25, 0.5, 32);
+			var joint3Material = new THREE.MeshPhongMaterial({ color: "Red" });
+			var joint3 = new THREE.Mesh(joint3Geometry, joint3Material);
+			joint3.position.set(joint3pos.x, joint3pos.y, joint3pos.z);
+			joint3.rotation.set(Math.PI / 2, 0, 0);
+
+			// Joint 4
+			let joint4pos = new THREE.Vector3(-3, -1, 0);
+			var joint4Geometry = new THREE.SphereGeometry(0.25, 32, 15);
+			var joint4Material = new THREE.MeshPhongMaterial({ color: "Red" });
+			var joint4 = new THREE.Mesh(joint4Geometry, joint4Material);
+			joint4.position.set(joint4pos.x, joint4pos.y, joint4pos.z);
+			joint4.rotation.set(Math.PI / 2, 0, 0);
+
+			// Leg Segment 1
+			let oldpos = joint2pos.distanceTo(joint3pos);
+			var leg1Geometry = new THREE.CylinderGeometry(
+				0.15,
+				0.15,
+				joint2pos.distanceTo(joint3pos),
+				32
+			)
+				.translate(0, joint2pos.distanceTo(joint3pos) * 0.5, 0)
+				.rotateX(Math.PI * 0.5);
+			var leg1Material = new THREE.MeshPhongMaterial({ color: "Violet" });
+			var leg1 = new THREE.Mesh(leg1Geometry, leg1Material);
+			leg1.position.copy(joint2pos);
+			leg1.lookAt(joint3pos);
+
+			leg1.rotation.x = 0;
+			leg1.rotation.y = Math.PI * 0.5;
+
+			// Leg segment 2
+			var leg2Geometry = new THREE.CylinderGeometry(
+				0.15,
+				0.15,
+				joint3pos.distanceTo(joint4pos),
+				32
+			)
+				.translate(0, joint3pos.distanceTo(joint4pos) * 0.5, 0)
+				.rotateX(Math.PI * 0.5);
+			var leg2Material = new THREE.MeshPhongMaterial({ color: "Green" });
+			var leg2 = new THREE.Mesh(leg2Geometry, leg2Material);
+			leg2.position.copy(joint3pos);
+			leg2.lookAt(joint4pos);
+
+			// Add cube to Scene
+			scene.add(joint1);
+			scene.add(joint2);
+			scene.add(joint3);
+			scene.add(joint4);
+			scene.add(leg1);
+			scene.add(leg2);
+			// scene.add(line);
+			scene.add(light1);
+			scene.add(light2);
+
+			// Render Loop
+			var render = function () {
+				requestAnimationFrame(render);
+
+				// joint1.position.set(joint1pos.x, joint1pos.y, joint1pos.z);
+				// joint2.position.set(joint2pos.x, joint2pos.y, joint2pos.z);
+				// joint3.position.set(joint3pos.x, joint3pos.y, joint3pos.z);
+				// joint4.position.set(joint4pos.x, joint4pos.y, joint4pos.z);
+
+				// leg1.scale.z = (joint2pos.distanceTo(joint3pos) / 2) * 0.8;
+				// leg1.position.set(0, joint2pos.distanceTo(joint3pos) * 0.5, 0);
+				// leg1.position.copy(joint2pos);
+				// leg1.lookAt(joint3pos);
+
+				// leg2.position.set(0, joint3pos.distanceTo(joint4pos) * 0.5, 0);
+				// leg2.position.copy(joint3pos);
+				// leg2.lookAt(joint4pos);
+
+				// joint3pos.x += 0.01;
+
+				if (flip) {
+					joint3pos.x += 0.01;
+					joint3pos.y += 0.01;
+
+					joint4pos.x += 0.01;
+					joint4pos.y += 0.01;
+					if (joint3pos.x > 1 || joint3pos.y > 1) {
+						flip = !flip;
+					}
+				} else {
+					joint3pos.x -= 0.01;
+					joint3pos.y -= 0.01;
+
+					joint4pos.x -= 0.01;
+					joint4pos.y -= 0.01;
+					if (joint3pos.x < -1 || joint3pos.y > 1) {
+						flip = !flip;
+					}
+				}
+
+				// Render the scene
+				renderer.render(scene, camera);
+			};
+
+			render();
+		</script>
+	</head>
+	<body></body>
+	<!-- <script src="three.js"></script>
+  <script src="OrbitControls.js"></script>
+  <script src="MathUtils.js"></script> -->
+	<!-- <script src="main.js"></script> -->
+</html>

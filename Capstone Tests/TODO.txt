@@ -1,0 +1,21 @@
+Bugs:
+- Calculation error on refresh
+
+TODO:
+- Offest leg hips from chassis
+- Background
+- Gait
+    - Fine control of parameters
+    - overlap stop and start
+- More control features
+- Stability analysis
+    - CG warning
+    - Dynamic Gait stabilization
+- Finish Model
+- Output readings live to user
+- Hexapod Control
+    - steering
+    - speed
+    - Stop/Start
+    - Tilt/Look
+    - Static animations

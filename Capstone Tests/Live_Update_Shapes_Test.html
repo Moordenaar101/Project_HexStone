@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Cube Test</title>
+		<link rel="stylesheet" href="styling.css" />
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "../build/three.module.js",
+					"ImportControls": "/examples/jsm/controls/OrbitControls.js",
+					"ImportMath": "/src/math/MathUtils.js",
+					"three/addons/": "../examples/jsm/",
+					"ImportMeshline": "../THREE.MeshLine-master/THREE.MeshLine-master/src/THREE.MeshLine.js"
+				}
+			}
+		</script>
+
+		<script type="module">
+			// ------------------------------------------------
+			// BASIC SETUP
+			// ------------------------------------------------
+
+			import * as THREE from "three";
+			import { OrbitControls } from "ImportControls";
+			import { MathUtils } from "ImportMath";
+			// import { Line2 } from "three/addons/lines/Line2.js";
+			// import { LineMaterial } from "three/addons/lines/LineMaterial.js";
+			// import { LineGeometry } from "three/addons/lines/LineGeometry.js";
+			// import { MeshLine, MeshLineMaterial } from "ImportMeshline";
+
+			// Create an empty scene
+			var scene = new THREE.Scene();
+
+			// Create a basic perspective camera
+			var camera = new THREE.PerspectiveCamera(
+				75,
+				window.innerWidth / window.innerHeight,
+				0.1,
+				1000
+			);
+			camera.position.z = 25;
+
+			// Create a renderer with Antialiasing
+			var renderer = new THREE.WebGLRenderer({ antialias: true });
+
+			// Configure renderer clear color
+			renderer.setClearColor("#000000");
+
+			// Configure renderer size
+			renderer.setSize(window.innerWidth, window.innerHeight);
+
+			// Append Renderer to DOM
+			document.body.appendChild(renderer.domElement);
+
+			const controls = new OrbitControls(camera, renderer.domElement);
+
+			// ------------------------------------------------
+			// FUN STARTS HERE
+			// ------------------------------------------------
+
+			const light1 = new THREE.AmbientLight({ color: "#ffffff" });
+			const light2 = new THREE.DirectionalLight({ color: "#ffffff" }, 5);
+			light2.position.set(3, 9, 0);
+
+			// Shapes
+
+			var shapes = [];
+
+			var shape0Geometry = new THREE.CylinderGeometry(0.75, 0.75, 1.5, 32);
+			var shape0Material = new THREE.MeshPhongMaterial({ color: "yellow" });
+			shapes.push(new THREE.Mesh(shape0Geometry, shape0Material));
+
+			var shape1Geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32).rotateX(
+				Math.PI * 0.5
+			);
+			var shape1Material = new THREE.MeshPhongMaterial({ color: "red" });
+			shapes.push(new THREE.Mesh(shape1Geometry, shape1Material));
+			shapes[1].position.set(
+				shapes[0].position.x,
+				shapes[0].position.y + 1,
+				shapes[0].position.z
+			);
+
+			var shape2Geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32).rotateX(
+				Math.PI * 0.5
+			);
+			var shape2Material = new THREE.MeshPhongMaterial({ color: "blue" });
+			shapes.push(new THREE.Mesh(shape2Geometry, shape2Material));
+			shapes[2].position.set(
+				shapes[1].position.x + 6.5,
+				shapes[1].position.y,
+				shapes[1].position.z
+			);
+
+			var shape3Geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32).rotateX(
+				Math.PI * 0.5
+			);
+			var shape3Material = new THREE.MeshPhongMaterial({ color: "blue" });
+			shapes.push(new THREE.Mesh(shape3Geometry, shape3Material));
+			shapes[3].position.set(
+				shapes[2].position.x + 5.5,
+				shapes[2].position.y,
+				shapes[2].position.z
+			);
+
+			let legLength = [
+				shapes[1].position.distanceTo(shapes[2].position),
+				shapes[2].position.distanceTo(shapes[3].position),
+			];
+
+			var shape4Geometry = new THREE.CylinderGeometry(
+				0.5,
+				0.5,
+				legLength[0],
+				32
+			).rotateX(Math.PI * 0.5);
+			var shape4Material = new THREE.MeshPhongMaterial({ color: "purple" });
+			shapes.push(new THREE.Mesh(shape4Geometry, shape4Material));
+			shapes[4].position.lerpVectors(
+				shapes[1].position,
+				shapes[2].position,
+				0.5
+			);
+			shapes[4].lookAt(shapes[1].position);
+
+			var shape5Geometry = new THREE.CylinderGeometry(
+				0.5,
+				0.25,
+				legLength[1],
+				32
+			).rotateX(Math.PI * 0.5);
+			var shape5Material = new THREE.MeshPhongMaterial({ color: "purple" });
+			shapes.push(new THREE.Mesh(shape5Geometry, shape5Material));
+			shapes[5].position.lerpVectors(
+				shapes[2].position,
+				shapes[3].position,
+				0.5
+			);
+			shapes[5].lookAt(shapes[2].position);
+
+			// Add objects to Scene
+			scene.add(light1);
+			scene.add(light2);
+
+			// for (let i = 0; i < shapes.length; i++) {
+			// 	scene.add(shapes[i]);
+			// }
+			scene.add(
+				shapes[0],
+				shapes[1],
+				shapes[2],
+				shapes[3],
+				shapes[4],
+				shapes[5]
+			);
+
+			var move = function (v) {
+				let curLength = shapes[1].position.distanceTo(v);
+				if (curLength > legLength[0] + legLength[1]) {
+					console.log("Too Far!");
+					v.lerp(
+						shapes[1].position,
+						1 - (legLength[0] + legLength[1]) / curLength
+					);
+					curLength = shapes[1].position.distanceTo(v);
+				} else if (v === shapes[3].position) {
+					console.log("Already There!");
+					return false;
+				}
+
+				// console.log("Total Leg Length:"legLength[0] + legLength[1]); // max distance V can be from (0,0)
+				console.log("V distance:", v.distanceTo(shapes[3].position)); // How far v is from (0,0)
+				console.log("V dist to Base:", v.distanceTo(shapes[1].position));
+				console.log(
+					"angle:",
+					Math.atan((v.y - shapes[1].position.y) / (v.x - shapes[1].position.x))
+				);
+
+				let j3 = Math.acos(
+					(legLength[0] * legLength[0] +
+						legLength[1] * legLength[1] -
+						curLength * curLength) /
+						(2 * (legLength[0] * legLength[1]))
+				);
+
+				let vSubbed = new THREE.Vector3();
+				vSubbed.subVectors(v, shapes[1].position);
+				console.log("vSubbed:", vSubbed);
+
+				// let j2 =
+				// 	Math.acos(
+				// 		(curLength * curLength +
+				// 			legLength[0] * legLength[0] -
+				// 			legLength[1] * legLength[1]) /
+				// 			(2 * curLength * legLength[0])
+				// 	) -
+				// 	Math.atan(
+				// 		(v.y - shapes[1].position.y) / (v.x - shapes[1].position.x)
+				// 	);
+
+				let b = Math.acos(
+					(curLength * curLength +
+						legLength[0] * legLength[0] -
+						legLength[1] * legLength[1]) /
+						(2 * curLength * legLength[0])
+				);
+				console.log("B =", THREE.MathUtils.radToDeg(b));
+
+				let a = Math.atan(
+					(v.y - shapes[1].position.y) / (v.x - shapes[1].position.x)
+				);
+				console.log("A =", THREE.MathUtils.radToDeg(a));
+
+				let j2 = b + a;
+
+				let temp1 = new THREE.Vector3();
+				temp1.copy(shapes[2].position).normalize();
+				shapes[2].position.lerp(shapes[1].position, 1);
+				shapes[2].rotation.z = +j2 * 0.5;
+				shapes[2].translateOnAxis(temp1, legLength[0]);
+				console.log("After Translate J2:", shapes[2].position);
+
+				temp1.copy(shapes[3].position).normalize();
+
+				shapes[3].position.lerp(shapes[2].position, 1);
+				// shapes[3].lookAt(shapes[1].position);
+				let angle = shapes[3].position.angleTo(shapes[1].position);
+				shapes[3].rotation.set(0, 0, -angle);
+				shapes[3].rotation.z -= j3;
+				shapes[3].translateOnAxis(temp1, legLength[1]);
+				console.log("here:", shapes[3].position);
+				console.log(
+					"Angle:",
+					THREE.MathUtils.radToDeg(
+						shapes[3].position.angleTo(shapes[2].position)
+					)
+				);
+
+				// let ang = shapes[3].position.angleTo(shapes[2].position) - a;
+				// console.log("ang°:", THREE.MathUtils.radToDeg(ang));
+
+				// shapes[3].position.lerp(v, 1);
+
+				// let temp1 = new THREE.Vector3();
+				// temp1.copy(shapes[2].position).normalize();
+
+				// shapes[2].position.lerp(shapes[3].position, 1);
+
+				// shapes[2].rotation.z = ang;
+				// shapes[2].translateOnAxis(temp1, legLength[1]);
+				console.log("After Translate J2:", shapes[2].position);
+
+				console.log("J2:", j2);
+				console.log("j2° =", THREE.MathUtils.radToDeg(j2));
+				console.log("J3:", j3);
+				console.log("j3° =", THREE.MathUtils.radToDeg(j3));
+				console.log("V  Final Distance:", v.distanceTo(shapes[3].position));
+				console.log("Final Pos:", shapes[2].position, shapes[3].position);
+			};
+
+			let here1 = new THREE.Vector3(4, -4, 0);
+			let here2 = new THREE.Vector3(5, -3, 0);
+
+			move(here1);
+			// move(here2);
+			// console.log(
+			// 	"A in rads:",
+			// 	Math.atan(
+			// 		(here1.y - shapes[1].position.y) / (here1.x - shapes[1].position.x)
+			// 	)
+			// );
+			// console.log(
+			// 	"A in deg:",
+			// 	THREE.MathUtils.radToDeg(
+			// 		Math.atan(
+			// 			(here1.y - shapes[1].position.y) / (here1.x - shapes[1].position.x)
+			// 		)
+			// 	)
+			// );
+			// console.log("angle to in rads:", shapes[1].position.angleTo(here1));
+			// console.log(
+			// 	"angle to in deg:",
+			// 	THREE.MathUtils.radToDeg(shapes[1].position.angleTo(here1)) - 90
+			// );
+
+			// Render Loop
+			var render = function () {
+				requestAnimationFrame(render);
+
+				// Render the scene
+				renderer.render(scene, camera);
+
+				// move(here);
+
+				shapes[4].position.lerpVectors(
+					shapes[1].position,
+					shapes[2].position,
+					0.5
+				);
+				shapes[4].lookAt(shapes[1].position);
+
+				shapes[5].position.lerpVectors(
+					shapes[2].position,
+					shapes[3].position,
+					0.5
+				);
+				shapes[5].lookAt(shapes[2].position);
+			};
+
+			render();
+		</script>
+	</head>
+	<body></body>
+</html>

@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Hexapod</title>
+		<link rel="stylesheet" href="styling.css" />
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "../build/three.module.js",
+					"ImportControls": "../examples/jsm/controls/OrbitControls.js",
+					"ImportMath": "../src/math/MathUtils.js",
+					"three/addons/": "../examples/jsm/",
+					"ImportMeshline": "../THREE.MeshLine-master/THREE.MeshLine-master/src/THREE.MeshLine.js"
+				}
+			}
+		</script>
+
+		<script type="module">
+			// ------------------------------------------------
+			// BASIC SETUP
+			// ------------------------------------------------
+
+			console.clear();
+
+			import * as THREE from "three";
+			import { OrbitControls } from "ImportControls";
+			import { MathUtils } from "ImportMath";
+			import { GUI } from "three/addons/libs/lil-gui.module.min.js";
+
+			// Create an empty scene
+			let scene = new THREE.Scene();
+
+			// Create a basic perspective camera
+			let camera = new THREE.PerspectiveCamera(
+				75,
+				window.innerWidth / window.innerHeight,
+				0.1,
+				1000
+			);
+
+			camera.position.x = -5;
+			camera.position.y = 10;
+			camera.position.z = 15;
+
+			// Create a renderer with Antialiasing
+			let renderer = new THREE.WebGLRenderer({ antialias: true });
+
+			// Configure renderer clear color
+			renderer.setClearColor("#000000");
+
+			// Configure renderer size
+			renderer.setSize(window.innerWidth, window.innerHeight);
+
+			// Append Renderer to DOM
+			document.body.appendChild(renderer.domElement);
+
+			const controls = new OrbitControls(camera, renderer.domElement);
+
+			const light1 = new THREE.AmbientLight({ color: "#ffffff" });
+			const light2 = new THREE.DirectionalLight({ color: "#ffffff" }, 5);
+			light2.position.set(3, 9, 0);
+
+			scene.add(light1);
+			scene.add(light2);
+
+			const size = 100;
+			const divisions = 100;
+			const gridColor = new THREE.Color("rgb(75, 10, 50)");
+			const centerColor = new THREE.Color("rgb(25, 25, 25)");
+
+			const gridHelper = new THREE.GridHelper(
+				size,
+				divisions,
+				gridColor,
+				centerColor
+			);
+			scene.add(gridHelper);
+
+			// gridHelper.rotateX(Math.PI / 2);
+
+			const axesHelper = new THREE.AxesHelper(5);
+			axesHelper.position.y += 0.01;
+			// scene.add(axesHelper);
+
+			const clock = new THREE.Clock();
+
+			const panel = new GUI({ width: 310 });
+
+			let settings;
+
+			const folder1 = panel.addFolder("Controls");
+
+			settings = {
+				Animate: true,
+				"Start X": -5,
+				"End X": 5,
+				"Control Y": 8,
+				"Control Z": 0,
+				"Control Angle": 0,
+			};
+
+			folder1.add(settings, "Animate").onChange(function (bool) {
+				animate = bool;
+			});
+
+			folder1.add(settings, "Start X", -10, -0.1, 0.1).onChange(function (val) {
+				startOffset = val + 5;
+			});
+
+			folder1.add(settings, "End X", 0.1, 10, 0.1).onChange(function (val) {
+				endOffset = val - 5;
+			});
+
+			folder1.add(settings, "Control Y", 0.1, 10, 0.1).onChange(function (val) {
+				control.position.y = val;
+			});
+
+			folder1.add(settings, "Control Z", -10, 10, 0.1).onChange(function (val) {
+				controlOffset = val;
+			});
+
+			folder1
+				.add(settings, "Control Angle", -180, 180, 1)
+				.onChange(function (val) {
+					// angle = THREE.MathUtils.degToRad(val);
+				});
+
+			let startGeometry = new THREE.SphereGeometry(0.25, 32, 32);
+			let startMaterial = new THREE.MeshPhongMaterial({ color: "cyan" });
+			let start = new THREE.Mesh(startGeometry, startMaterial);
+
+			scene.add(start);
+
+			let startOrigin = new THREE.Vector3(-5, 0, 0);
+
+			start.position.copy(startOrigin);
+
+			let endGeometry = new THREE.SphereGeometry(0.25, 32, 32);
+			let endMaterial = new THREE.MeshPhongMaterial({ color: "magenta" });
+			let end = new THREE.Mesh(endGeometry, endMaterial);
+
+			scene.add(end);
+
+			let endOrigin = new THREE.Vector3(5, 0, 0);
+
+			end.position.copy(endOrigin);
+
+			let controlGeometry = new THREE.SphereGeometry(0.25, 32, 32);
+			let controlMaterial = new THREE.MeshPhongMaterial({ color: "yellow" });
+			let control = new THREE.Mesh(controlGeometry, controlMaterial);
+
+			scene.add(control);
+
+			let origin = new THREE.Vector3(0, 8, 0);
+
+			control.position.copy(origin);
+
+			let follower1Geometry = new THREE.SphereGeometry(0.5, 32, 32);
+			let follower1Material = new THREE.MeshPhongMaterial({ color: "red" });
+			let follower1 = new THREE.Mesh(follower1Geometry, follower1Material);
+
+			scene.add(follower1);
+
+			let follower2Geometry = new THREE.SphereGeometry(0.5, 32, 32);
+			let follower2Material = new THREE.MeshPhongMaterial({ color: "blue" });
+			let follower2 = new THREE.Mesh(follower2Geometry, follower2Material);
+
+			scene.add(follower2);
+
+			let follow1X = 0;
+			let follow1Y = 0;
+			let follow1Z = 0;
+
+			let follow2X = 0;
+			let follow2Z = 0;
+
+			let t = 0;
+			let angle = 0;
+			let startOffset = 0;
+			let endOffset = 0;
+			let controlOffset = 0;
+
+			let startX,
+				endX,
+				controlX,
+				startY,
+				endY,
+				controlY,
+				startZ,
+				endZ,
+				controlZ;
+
+			let direction = true;
+			let animate = true;
+
+			/*** Mesh Tests **/
+
+			let posArray = [0, 0, 0, 0, 0, 0];
+
+			let testShape = new THREE.Shape();
+			testShape.autoClose = true;
+
+			testShape.moveTo(start.position.x, start.position.z);
+			testShape.lineTo(follower1.position.x, follower1.position.y + 5);
+			testShape.lineTo(end.position.x, end.position.z);
+
+			let geometry = new THREE.ShapeGeometry(testShape);
+
+			// console.log(geometry);
+
+			const material = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+
+			const testShapeMesh = new THREE.Mesh(geometry, material);
+
+			scene.add(testShapeMesh);
+
+			/*** Mesh with points lerped for missing legs ***/
+
+			let tempPoints = [
+				[5, 5],
+				[-5, 5],
+				[-5, 0],
+				[-5, -5],
+				[0, -5],
+				[5, -5],
+			];
+			let givenPoints = [];
+
+			for (let i = 0; i < 6; i++) {
+				givenPoints.push(new THREE.Vector2(tempPoints[i][0], tempPoints[i][1]));
+			}
+
+			var shapePoints = new THREE.Shape(givenPoints);
+			var geom = new THREE.ShapeGeometry(shapePoints);
+
+			// var pointsObj = new THREE.Points(
+			// 	geom,
+			// 	new THREE.PointsMaterial({
+			// 		color: 0xff0000,
+			// 		size: 3,
+			// 	})
+			// );
+			// scene.add(pointsObj);
+
+			// var line = new THREE.LineLoop(
+			// 	geom,
+			// 	new THREE.LineBasicMaterial({
+			// 		color: 0x0000ff,
+			// 		// size: 5,
+			// 	})
+			// );
+			// scene.add(line);
+
+			var shape = new THREE.Mesh(
+				geom,
+				new THREE.MeshBasicMaterial({
+					color: 0xff0000,
+					side: THREE.DoubleSide,
+					name: "Shape",
+				})
+			);
+			scene.add(shape);
+			// console.log(geom);
+
+			// Render Loop
+			let render = function () {
+				requestAnimationFrame(render);
+
+				/*** Mesh Tests **/
+				let newShape = new THREE.Shape();
+				newShape.autoCloase = true;
+				newShape.moveTo(start.position.x, start.position.z);
+				newShape.lineTo(follower1.position.x, follower1.position.y);
+				newShape.lineTo(end.position.x, end.position.z);
+
+				let newGeometry = new THREE.ShapeGeometry(newShape);
+
+				geometry.attributes.position.array =
+					newGeometry.attributes.position.array;
+				geometry.attributes.position.needsUpdate = true;
+
+				start.position.x =
+					Math.cos(angle) * (startOrigin.x + startOffset - origin.x) -
+					Math.sin(angle) * (startOrigin.z - origin.z) +
+					origin.x;
+				start.position.z =
+					Math.sin(angle) * (startOrigin.x + startOffset - origin.x) +
+					Math.cos(angle) * (startOrigin.z - origin.z) +
+					origin.z;
+
+				end.position.x =
+					Math.cos(angle) * (endOrigin.x + endOffset - origin.x) -
+					Math.sin(angle) * (endOrigin.z - origin.z) +
+					origin.x;
+				end.position.z =
+					Math.sin(angle) * (endOrigin.x + endOffset - origin.x) +
+					Math.cos(angle) * (endOrigin.z - origin.z) +
+					origin.z;
+
+				control.position.x =
+					Math.cos(angle) * (origin.x - origin.x) -
+					Math.sin(angle) * (controlOffset - origin.z) +
+					origin.x;
+				control.position.z =
+					Math.sin(angle) * (origin.x - origin.x) +
+					Math.cos(angle) * (controlOffset - origin.z) +
+					origin.z;
+
+				startX = start.position.x;
+				endX = end.position.x;
+				controlX = control.position.x;
+
+				startY = start.position.y;
+				endY = end.position.y;
+				controlY = control.position.y;
+
+				startZ = start.position.z;
+				endZ = end.position.z;
+				controlZ = control.position.z;
+
+				if (t >= 1) {
+					direction = false;
+				} else if (t <= 0) {
+					direction = true;
+				}
+
+				if (!animate) {
+					if (direction) {
+						t += 0.005;
+						follow1X = ((1-t)*(1-t))*startX + 2*(1-t)*t*controlX + t*t*endX; //prettier-ignore
+						follow1Y = ((1-t)*(1-t))*startY + 2*(1-t)*t*controlY + t*t*endY; //prettier-ignore
+						follow1Z = ((1-t)*(1-t))*startZ + 2*(1-t)*t*controlZ + t*t*endZ; //prettier-ignore
+					} else {
+						t -= 0.005;
+						follow1X = ((1-t)*(1-t))*startX + 2*(1-t)*t*controlX + t*t*endX; //prettier-ignore
+						follow1Z = ((1-t)*(1-t))*startZ + 2*(1-t)*t*controlZ + t*t*endZ; //prettier-ignore
+					}
+				}
+
+				follower1.position.set(follow1X, follow1Y, follow1Z);
+				follower2.position.set(follow2X, 0, follow2Z);
+
+				// Render the scene
+				renderer.render(scene, camera);
+			};
+
+			render();
+		</script>
+	</head>
+	<body></body>
+</html>

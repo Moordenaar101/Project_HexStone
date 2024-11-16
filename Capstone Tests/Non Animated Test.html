@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Cube Test</title>
+		<!-- <link rel="stylesheet" href="styling.css" /> -->
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "../build/three.module.js",
+					"ImportControls": "/examples/jsm/controls/OrbitControls.js",
+					"ImportMath": "/src/math/MathUtils.js",
+					"three/addons/": "../examples/jsm/",
+					"ImportMeshline": "../THREE.MeshLine-master/THREE.MeshLine-master/src/THREE.MeshLine.js"
+				}
+			}
+		</script>
+
+		<script type="module">
+			// ------------------------------------------------
+			// BASIC SETUP
+			// ------------------------------------------------
+
+			import * as THREE from "three";
+			import { OrbitControls } from "ImportControls";
+			import { MathUtils } from "ImportMath";
+			// import { Line2 } from "three/addons/lines/Line2.js";
+			// import { LineMaterial } from "three/addons/lines/LineMaterial.js";
+			// import { LineGeometry } from "three/addons/lines/LineGeometry.js";
+			// import { MeshLine, MeshLineMaterial } from "ImportMeshline";
+
+			// Create an empty scene
+			var scene = new THREE.Scene();
+
+			// Create a basic perspective camera
+			var camera = new THREE.PerspectiveCamera(
+				75,
+				window.innerWidth / window.innerHeight,
+				0.1,
+				1000
+			);
+			camera.position.z = 25;
+
+			// Create a renderer with Antialiasing
+			var renderer = new THREE.WebGLRenderer({ antialias: true });
+
+			// Configure renderer clear color
+			renderer.setClearColor("#000000");
+
+			// Configure renderer size
+			renderer.setSize(window.innerWidth, window.innerHeight);
+
+			// Append Renderer to DOM
+			document.body.appendChild(renderer.domElement);
+
+			const controls = new OrbitControls(camera, renderer.domElement);
+
+			// ------------------------------------------------
+			// FUN STARTS HERE
+			// ------------------------------------------------
+
+			const light1 = new THREE.AmbientLight({ color: "#ffffff" });
+			const light2 = new THREE.DirectionalLight({ color: "#ffffff" }, 5);
+			light2.position.set(3, 9, 0);
+
+			// Shapes
+
+			var endPointGeo = new THREE.SphereGeometry(0.25, 32, 16);
+			var endPointMat = new THREE.MeshPhongMaterial({ color: "green" });
+			var endPoint = new THREE.Mesh(endPointGeo, endPointMat);
+
+			var shapes = [];
+
+			var shape0Geometry = new THREE.CylinderGeometry(0.75, 0.75, 1.5, 32);
+			var shape0Material = new THREE.MeshPhongMaterial({ color: "yellow" });
+			shapes.push(new THREE.Mesh(shape0Geometry, shape0Material));
+
+			var shape1Geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32).rotateX(
+				Math.PI * 0.5
+			);
+			// shapes[0].position.x -= 5;
+			var shape1Material = new THREE.MeshPhongMaterial({ color: "red" });
+			shapes.push(new THREE.Mesh(shape1Geometry, shape1Material));
+			// shapes[1].position.lerp(shapes[0].position, 1);
+
+			var shape2Geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32).rotateX(
+				Math.PI * 0.5
+			);
+			var shape2Material = new THREE.MeshPhongMaterial({ color: "blue" });
+			shapes.push(new THREE.Mesh(shape2Geometry, shape2Material));
+			// shapes[2].position.lerp(shapes[1].position, 1);
+			// shapes[2].position.x += 5;
+
+			var shape3Geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32).rotateX(
+				Math.PI * 0.5
+			);
+			var shape3Material = new THREE.MeshPhongMaterial({ color: "blue" });
+			shapes.push(new THREE.Mesh(shape3Geometry, shape3Material));
+			// shapes[3].position.lerp(shapes[2].position, 1);
+			// shapes[3].position.x += 5;
+
+			// let legLength = [
+			// 	shapes[1].position.distanceTo(shapes[2].position),
+			// 	shapes[2].position.distanceTo(shapes[3].position),
+			// ];
+
+			var shape4Geometry = new THREE.CylinderGeometry(0.5, 0.5, 5, 32).rotateX(
+				Math.PI * 0.5
+			);
+			var shape4Material = new THREE.MeshPhongMaterial({ color: "purple" });
+			shapes.push(new THREE.Mesh(shape4Geometry, shape4Material));
+			// shapes[4].position.lerpVectors(
+			// 	shapes[1].position,
+			// 	shapes[2].position,
+			// 	0.5
+			// );
+			// shapes[4].lookAt(shapes[1].position);
+
+			var shape5Geometry = new THREE.CylinderGeometry(0.5, 0.25, 5, 32).rotateX(
+				Math.PI * 0.5
+			);
+			var shape5Material = new THREE.MeshPhongMaterial({ color: "purple" });
+			shapes.push(new THREE.Mesh(shape5Geometry, shape5Material));
+			// shapes[5].position.lerpVectors(
+			// 	shapes[2].position,
+			// 	shapes[3].position,
+			// 	0.5
+			// );
+			// shapes[5].lookAt(shapes[2].position);
+
+			const section1 = new THREE.Group();
+			const section2 = new THREE.Group();
+			const section3 = new THREE.Group();
+
+			section3.add(shapes[3], shapes[5]);
+			section2.add(shapes[1], shapes[2], shapes[4], section3);
+			section1.add(shapes[0], section2);
+
+			endPoint.position.set(5, -2, 0);
+
+			shapes[2].position.x = 5;
+
+			shapes[3].position.x = 5;
+
+			shapes[4].position.set(5 / 2, 0, 0);
+			shapes[4].lookAt(shapes[1].position);
+
+			shapes[5].position.set(5 / 2, 0, 0);
+
+			section3.position.set(5, 0, 0);
+
+			shapes[5].lookAt(shapes[3].position);
+
+			section2.position.y = 1;
+
+			// Add objects to Scene
+			scene.add(light1);
+			scene.add(light2);
+			scene.add(section1);
+			scene.add(endPoint);
+
+			// Aligning shapes
+
+			let finalPos = endPoint.position;
+
+			let worldPos = new THREE.Vector3();
+			shapes[1].getWorldPosition(worldPos);
+			console.log("World Pos:", worldPos);
+
+			let l = worldPos.distanceTo(finalPos);
+
+			let j3 = Math.acos((5 * 5 + 5 * 5 - l * l) / (2 * (5 * 5)));
+
+			let z = worldPos.y - finalPos.y;
+			console.log("Z:", z);
+
+			let h = finalPos.x - worldPos.x;
+			console.log("H:", h);
+
+			let a = Math.atan(z / h);
+			console.log("A°:", THREE.MathUtils.radToDeg(a));
+
+			let b = Math.acos((l * l + 5 * 5 - 5 * 5) / (2 * l * 5));
+			console.log("B°:", THREE.MathUtils.radToDeg(b));
+
+			let j2 = b - a;
+			console.log("j2°:", THREE.MathUtils.radToDeg(j2));
+
+			section2.rotation.z = j2;
+			// section2.rotation.z = 0;
+
+			section3.rotateZ(Math.PI);
+			section3.rotation.z = j3 - Math.PI;
+
+			let temp = new THREE.Vector3();
+			shapes[2].getWorldPosition(temp);
+			console.log("S2 Final Pos:", temp);
+			shapes[3].getWorldPosition(temp);
+			console.log("S3 Final Pos:", temp);
+
+			// Render Loop
+			var render = function () {
+				requestAnimationFrame(render);
+
+				// Render the scene
+				renderer.render(scene, camera);
+			};
+
+			render();
+		</script>
+	</head>
+	<body></body>
+</html>
