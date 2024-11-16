@@ -20,4 +20,8 @@ TODO:
     - Tilt/Look
     - Static animations
 
-Learn Git Stuffs
+How to Upload to Git:
+    - git status (Not necessary)
+    - git add .
+    - git commit
+    - git push
