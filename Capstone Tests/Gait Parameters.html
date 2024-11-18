@@ -692,58 +692,54 @@
 
 				walkCycle() {
 					let gaitRatio = 3.2 / 6;
-					let calcRatio;
 
 					for (let i = 0; i < 6; i++) {
-						if (this.offsets[i] > 2) {
+						if (this.offsets[i] > 1000) {
 							this.offsets[i] = 0;
 						}
 
-						if (this.offsets[i] <= 1) {
-							this.offsets[i] += 0.01 / gaitRatio;
+						let calcedRatio = this.offsets[i] / (points / 2);
+
+						console.log(
+							mapVal(1000, 0, this.offsets[i] / (points / 2), 0, calcedRatio)
+						);
+
+						if (calcedRatio <= 1 * gaitRatio) {
+							this.offsets[i] += 5;
 							this.onGround[i] = false;
+
 							calcX =
-								(1 - this.offsets[i]) * (1 - this.offsets[i]) * start.x +
-								2 * (1 - this.offsets[i]) * this.offsets[i] * control.x +
-								this.offsets[i] * this.offsets[i] * end.x;
+								(1 - calcedRatio) * (1 - calcedRatio) * start.x +
+								2 * (1 - calcedRatio) * calcedRatio * control.x +
+								calcedRatio * calcedRatio * end.x;
 							calcY =
-								(1 - this.offsets[i]) *
-									(1 - this.offsets[i]) *
-									(-1 - chassisHeight) +
+								(1 - calcedRatio) * (1 - calcedRatio) * (-1 - chassisHeight) +
 								2 *
-									(1 - this.offsets[i]) *
-									this.offsets[i] *
+									(1 - calcedRatio) *
+									calcedRatio *
 									(control.y + 1 * this.stepHeight) +
-								this.offsets[i] * this.offsets[i] * (-1 - chassisHeight);
+								calcedRatio * calcedRatio * (-1 - chassisHeight);
 							calcZ =
-								(1 - this.offsets[i]) *
-									(1 - this.offsets[i]) *
+								(1 - calcedRatio) *
+									(1 - calcedRatio) *
 									(start.z + 1 * this.stepDis) +
-								2 * (1 - this.offsets[i]) * this.offsets[i] * control.z +
-								this.offsets[i] * this.offsets[i] * (end.z - 1 * this.stepDis);
+								2 * (1 - calcedRatio) * calcedRatio * control.z +
+								calcedRatio * calcedRatio * (end.z - 1 * this.stepDis);
 						} else {
-							this.offsets[i] += 0.01 / 1.25;
+							this.offsets[i] += 5;
 							this.onGround[i] = true;
 							calcX =
-								(this.offsets[i] - 1) * (this.offsets[i] - 1) * start.x +
-								2 *
-									(this.offsets[i] - 1) *
-									(1 - (this.offsets[i] - 1)) *
-									control.x +
-								(1 - (this.offsets[i] - 1)) *
-									(1 - (this.offsets[i] - 1)) *
-									end.x;
+								(calcedRatio - 1) * (calcedRatio - 1) * start.x +
+								2 * (calcedRatio - 1) * (1 - (calcedRatio - 1)) * control.x +
+								(1 - (calcedRatio - 1)) * (1 - (calcedRatio - 1)) * end.x;
 							calcY = -1 - chassisHeight;
 							calcZ =
-								(this.offsets[i] - 1) *
-									(this.offsets[i] - 1) *
+								(calcedRatio - 1) *
+									(calcedRatio - 1) *
 									(start.z + 1 * this.stepDis) +
-								2 *
-									(this.offsets[i] - 1) *
-									(1 - (this.offsets[i] - 1)) *
-									control.z +
-								(1 - (this.offsets[i] - 1)) *
-									(1 - (this.offsets[i] - 1)) *
+								2 * (calcedRatio - 1) * (1 - (calcedRatio - 1)) * control.z +
+								(1 - (calcedRatio - 1)) *
+									(1 - (calcedRatio - 1)) *
 									(end.z - 1 * this.stepDis);
 						}
 
@@ -854,18 +850,26 @@
 				}
 			}
 
+			let mapVal = function (aMax, aMin, bMax, bMin, val) {
+				let aDif = aMax - aMin;
+				let bDif = bMax - bMin;
+				let result = (val / aDif) * bDif;
+				return result;
+			};
+
 			calcAngles();
 			updateAssembly();
 
+			let points = 1000;
 			const rippleGait = new Gait(
 				"ripple",
 				[
-					(2 / 6) * 0,
-					(2 / 6) * 4,
-					(2 / 6) * 2,
-					(2 / 6) * 5,
-					(2 / 6) * 1,
-					(2 / 6) * 3,
+					(points / 6) * 0,
+					(points / 6) * 4,
+					(points / 6) * 2,
+					(points / 6) * 5,
+					(points / 6) * 1,
+					(points / 6) * 3,
 				],
 				1,
 				0,
