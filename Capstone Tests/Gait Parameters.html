@@ -149,6 +149,7 @@
 					"Chassis Height": 3.5,
 					"Step Length": 0,
 					"Step Height": 0,
+					"Straif Angle": 0,
 					"Joint Diameter": 0.5,
 					"Leg Diameter": 0.25,
 					"Endpoint Diameter": 0.1,
@@ -193,6 +194,12 @@
 					.listen()
 					.onChange(function (val) {
 						rippleGait.stepHeight = val;
+					});
+				folder2
+					.add(settings, "Straif Angle", -90, 90, 1)
+					.listen()
+					.onChange(function (val) {
+						rippleGait.straifAngle = MathUtils.degToRad(val);
 					});
 				folder3
 					.add(settings, "Joint Diameter", 0.1, 5, 0.1)
@@ -600,17 +607,26 @@
 			calcAngles();
 			updateAssembly();
 
-			let start = new THREE.Vector3();
-			let end = new THREE.Vector3();
-			let control = new THREE.Vector3();
+			// Bezier curve control points
+
+			let start = new THREE.Vector3().set(6, 0, 6);
+			let end = new THREE.Vector3().set(6, 0, -6);
+			let control = new THREE.Vector3().set(6, 6, 0);
 			let calcX, calcY, calcZ;
+			let startOrigin = start.clone();
+			let endOrigin = end.clone();
 
-			start.set(6, -1 - chassisHeight, 6);
-			end.set(6, -1 - chassisHeight, -6);
-			control.set(6, 6, 0);
+			let follower1Geometry = new THREE.SphereGeometry(0.5, 32, 32);
+			let follower1Material = new THREE.MeshPhongMaterial({ color: "red" });
+			let follower1 = new THREE.Mesh(follower1Geometry, follower1Material);
 
-			let cycle = [0, 0, 0, 0, 0, 0],
-				stance = [true, true, true, true, true, true];
+			scene.add(follower1);
+
+			// let follower2Geometry = new THREE.SphereGeometry(0.5, 32, 32);
+			// let follower2Material = new THREE.MeshPhongMaterial({ color: "blue" });
+			// let follower2 = new THREE.Mesh(follower2Geometry, follower2Material);
+
+			// scene.add(follower2);
 
 			// Tripod
 			// cycle[0] = 2 - (1 / 3) * 3 - 2;
@@ -637,16 +653,7 @@
 			// cycle[5] = 2 - (1 / 3) * 6 - 2;
 
 			class Gait {
-				constructor(
-					name,
-					offsets,
-					maxSpeed,
-					stepDis,
-					stepHeight,
-					turnAngle,
-					straifeAngle,
-					speed
-				) {
+				constructor(name, offsets, maxSpeed, stepDis, stepHeight, speed) {
 					this.name = name;
 					this.offsets = offsets;
 					this.maxSpeed = maxSpeed;
@@ -683,69 +690,108 @@
 					this.stabMesh.rotateX(Math.PI / 2);
 					scene.add(this.stabMesh);
 
+					/***	Movement Parameters	***/
 					this.stepDis = stepDis;
 					this.stepHeight = stepHeight;
-					this.turnAngle = turnAngle;
-					this.straifeAngle = straifeAngle;
+					this.turnAngle = 0;
+					this.straifAngle = 0;
 					this.speed = speed;
 				}
 
 				walkCycle() {
-					let gaitRatio = 3.2 / 6;
+					let gaitRatio = 1 - 4 / 6;
+					let angle;
 
 					for (let i = 0; i < 6; i++) {
 						if (this.offsets[i] > 1000) {
+							//Reset offset
 							this.offsets[i] = 0;
 						}
 
+						/***	Straiffing algorithm	***/
+
+						if (i < 3) {
+							angle = this.straifAngle * -1;
+						} else {
+							angle = this.straifAngle;
+						}
+
+						start.x =
+							Math.cos(angle) * (startOrigin.x - control.x) -
+							Math.sin(angle) * (startOrigin.z - control.z) +
+							control.x;
+						start.z =
+							Math.sin(angle) * (startOrigin.x - control.x) +
+							Math.cos(angle) * (startOrigin.z + this.stepDis - control.z) +
+							control.z;
+
+						end.x =
+							Math.cos(angle) * (endOrigin.x - control.x) -
+							Math.sin(angle) * (endOrigin.z - control.z) +
+							control.x;
+						end.z =
+							Math.sin(angle) * (endOrigin.x - control.x) +
+							Math.cos(angle) * (endOrigin.z - this.stepDis - control.z) +
+							control.z;
+
+						/***	Base walk gait algorithm	***/
 						let calcedRatio = this.offsets[i] / (points / 2);
+						let calcedOffset;
 
-						console.log(
-							mapVal(1000, 0, this.offsets[i] / (points / 2), 0, calcedRatio)
-						);
-
-						if (calcedRatio <= 1 * gaitRatio) {
-							this.offsets[i] += 5;
+						if (calcedRatio <= 2 * gaitRatio) {
 							this.onGround[i] = false;
 
+							calcedOffset = mapVal(calcedRatio, 0, 2 * gaitRatio, 0, 1);
 							calcX =
-								(1 - calcedRatio) * (1 - calcedRatio) * start.x +
-								2 * (1 - calcedRatio) * calcedRatio * control.x +
-								calcedRatio * calcedRatio * end.x;
+								(1 - calcedOffset) * (1 - calcedOffset) * start.x +
+								2 * (1 - calcedOffset) * calcedOffset * control.x +
+								calcedOffset * calcedOffset * end.x;
 							calcY =
-								(1 - calcedRatio) * (1 - calcedRatio) * (-1 - chassisHeight) +
+								(1 - calcedOffset) * (1 - calcedOffset) * (-1 - chassisHeight) +
 								2 *
-									(1 - calcedRatio) *
-									calcedRatio *
+									(1 - calcedOffset) *
+									calcedOffset *
 									(control.y + 1 * this.stepHeight) +
-								calcedRatio * calcedRatio * (-1 - chassisHeight);
+								calcedOffset * calcedOffset * (-1 - chassisHeight);
 							calcZ =
-								(1 - calcedRatio) *
-									(1 - calcedRatio) *
+								(1 - calcedOffset) *
+									(1 - calcedOffset) *
 									(start.z + 1 * this.stepDis) +
-								2 * (1 - calcedRatio) * calcedRatio * control.z +
-								calcedRatio * calcedRatio * (end.z - 1 * this.stepDis);
+								2 * (1 - calcedOffset) * calcedOffset * control.z +
+								calcedOffset * calcedOffset * (end.z - 1 * this.stepDis);
 						} else {
-							this.offsets[i] += 5;
 							this.onGround[i] = true;
+
+							calcedOffset = mapVal(calcedRatio, 2 * gaitRatio, 2, 1, 2);
+							if (i == 0) {
+								// console.log(calcedOffset);
+							}
+
 							calcX =
-								(calcedRatio - 1) * (calcedRatio - 1) * start.x +
-								2 * (calcedRatio - 1) * (1 - (calcedRatio - 1)) * control.x +
-								(1 - (calcedRatio - 1)) * (1 - (calcedRatio - 1)) * end.x;
+								(calcedOffset - 1) * (calcedOffset - 1) * start.x +
+								2 * (calcedOffset - 1) * (1 - (calcedOffset - 1)) * control.x +
+								(1 - (calcedOffset - 1)) * (1 - (calcedOffset - 1)) * end.x;
 							calcY = -1 - chassisHeight;
 							calcZ =
-								(calcedRatio - 1) *
-									(calcedRatio - 1) *
+								(calcedOffset - 1) *
+									(calcedOffset - 1) *
 									(start.z + 1 * this.stepDis) +
-								2 * (calcedRatio - 1) * (1 - (calcedRatio - 1)) * control.z +
-								(1 - (calcedRatio - 1)) *
-									(1 - (calcedRatio - 1)) *
+								2 * (calcedOffset - 1) * (1 - (calcedOffset - 1)) * control.z +
+								(1 - (calcedOffset - 1)) *
+									(1 - (calcedOffset - 1)) *
 									(end.z - 1 * this.stepDis);
 						}
 
-						// if (this.offsets[i] >= 0.5) { /* This makes it pretty but need to fix gait. this is just for looks */
-						// 	this.onGround[i] = true;
-						// }
+						/***	 For Testing 	***/
+						calcedOffset = 1.5;
+
+						if (i == 0) {
+							follower1.position.set(calcX, 0, calcZ);
+							console.log(follower1.positon);
+						}
+						/*****************************************************************/
+
+						this.offsets[i] += 4;
 
 						goals[i].set(calcX, calcY, calcZ);
 
@@ -760,6 +806,18 @@
 				checkStability() {
 					let worldPos = new THREE.Vector3();
 					this.stabilityPolygon = [];
+
+					let onGroundCount = 0;
+					for (let h = 0; h < 6; h++) {
+						if (this.onGround[h] == true) {
+							onGroundCount++;
+						}
+					}
+					if (onGroundCount < 3) {
+						console.warn("Less that 3 points of contact!");
+					} else {
+						// console.log(onGroundCount, "Feet on Gound");
+					}
 
 					for (let i = 0; i < 6; i++) {
 						if (this.onGround[i] == true) {
@@ -850,11 +908,10 @@
 				}
 			}
 
-			let mapVal = function (aMax, aMin, bMax, bMin, val) {
-				let aDif = aMax - aMin;
-				let bDif = bMax - bMin;
-				let result = (val / aDif) * bDif;
-				return result;
+			let mapVal = function (value, fromMin, fromMax, toMin, toMax) {
+				return (
+					((value - fromMin) * (toMax - toMin)) / (fromMax - fromMin) + toMin
+				);
 			};
 
 			calcAngles();
