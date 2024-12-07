@@ -147,8 +147,8 @@
 					"Show Goal": true,
 					"Animate Model": true,
 					"Chassis Height": 3.5,
-					"Step Length": 0,
-					"Step Height": 0,
+					"Step Length": 5,
+					"Step Height": 4,
 					"Straif Angle": 0,
 					"Joint Diameter": 0.5,
 					"Leg Diameter": 0.25,
@@ -184,13 +184,13 @@
 						}
 					});
 				folder2
-					.add(settings, "Step Length", -5, 5, 0.1)
+					.add(settings, "Step Length", 2, 8, 0.1)
 					.listen()
 					.onChange(function (val) {
 						rippleGait.stepDis = val;
 					});
 				folder2
-					.add(settings, "Step Height", -5, 5, 0.1)
+					.add(settings, "Step Height", 0, 8, 0.1)
 					.listen()
 					.onChange(function (val) {
 						rippleGait.stepHeight = val;
@@ -609,18 +609,18 @@
 
 			// Bezier curve control points
 
-			let start = new THREE.Vector3().set(6, 0, 6);
-			let end = new THREE.Vector3().set(6, 0, -6);
-			let control = new THREE.Vector3().set(6, 6, 0);
+			let start = new THREE.Vector3().set(6, 0, 5);
+			let end = new THREE.Vector3().set(6, 0, -5);
+			let control = new THREE.Vector3().set(6, 4, 0);
 			let calcX, calcY, calcZ;
 			let startOrigin = start.clone();
 			let endOrigin = end.clone();
 
-			let follower1Geometry = new THREE.SphereGeometry(0.5, 32, 32);
-			let follower1Material = new THREE.MeshPhongMaterial({ color: "red" });
-			let follower1 = new THREE.Mesh(follower1Geometry, follower1Material);
+			// let follower1Geometry = new THREE.SphereGeometry(0.5, 32, 32);
+			// let follower1Material = new THREE.MeshPhongMaterial({ color: "red" });
+			// let follower1 = new THREE.Mesh(follower1Geometry, follower1Material);
 
-			scene.add(follower1);
+			// scene.add(follower1);
 
 			// let follower2Geometry = new THREE.SphereGeometry(0.5, 32, 32);
 			// let follower2Material = new THREE.MeshPhongMaterial({ color: "blue" });
@@ -715,23 +715,32 @@
 						} else {
 							angle = this.straifAngle;
 						}
+						// console.log(start, end);
 
 						start.x =
 							Math.cos(angle) * (startOrigin.x - control.x) -
-							Math.sin(angle) * (startOrigin.z - control.z) +
+							Math.sin(angle) *
+								(startOrigin.z * (this.stepDis / 2 / defaultStepDis) -
+									control.z) +
 							control.x;
 						start.z =
 							Math.sin(angle) * (startOrigin.x - control.x) +
-							Math.cos(angle) * (startOrigin.z + this.stepDis - control.z) +
+							Math.cos(angle) *
+								(startOrigin.z * (this.stepDis / 2 / defaultStepDis) -
+									control.z) +
 							control.z;
 
 						end.x =
 							Math.cos(angle) * (endOrigin.x - control.x) -
-							Math.sin(angle) * (endOrigin.z - control.z) +
+							Math.sin(angle) *
+								(endOrigin.z * (this.stepDis / 2 / defaultStepDis) -
+									control.z) +
 							control.x;
 						end.z =
 							Math.sin(angle) * (endOrigin.x - control.x) +
-							Math.cos(angle) * (endOrigin.z - this.stepDis - control.z) +
+							Math.cos(angle) *
+								(endOrigin.z * (this.stepDis / 2 / defaultStepDis) -
+									control.z) +
 							control.z;
 
 						/***	Base walk gait algorithm	***/
@@ -751,21 +760,19 @@
 								2 *
 									(1 - calcedOffset) *
 									calcedOffset *
-									(control.y + 1 * this.stepHeight) +
+									(control.y * (this.stepHeight / defaultStepHeight)) +
 								calcedOffset * calcedOffset * (-1 - chassisHeight);
 							calcZ =
-								(1 - calcedOffset) *
-									(1 - calcedOffset) *
-									(start.z + 1 * this.stepDis) +
+								(1 - calcedOffset) * (1 - calcedOffset) * start.z +
 								2 * (1 - calcedOffset) * calcedOffset * control.z +
-								calcedOffset * calcedOffset * (end.z - 1 * this.stepDis);
+								calcedOffset * calcedOffset * end.z;
+							// if (i == 0) {
+							// 	console.log(calcY);
+							// }
 						} else {
 							this.onGround[i] = true;
 
 							calcedOffset = mapVal(calcedRatio, 2 * gaitRatio, 2, 1, 2);
-							if (i == 0) {
-								// console.log(calcedOffset);
-							}
 
 							calcX =
 								(calcedOffset - 1) * (calcedOffset - 1) * start.x +
@@ -773,25 +780,12 @@
 								(1 - (calcedOffset - 1)) * (1 - (calcedOffset - 1)) * end.x;
 							calcY = -1 - chassisHeight;
 							calcZ =
-								(calcedOffset - 1) *
-									(calcedOffset - 1) *
-									(start.z + 1 * this.stepDis) +
+								(calcedOffset - 1) * (calcedOffset - 1) * start.z +
 								2 * (calcedOffset - 1) * (1 - (calcedOffset - 1)) * control.z +
-								(1 - (calcedOffset - 1)) *
-									(1 - (calcedOffset - 1)) *
-									(end.z - 1 * this.stepDis);
+								(1 - (calcedOffset - 1)) * (1 - (calcedOffset - 1)) * end.z;
 						}
 
-						/***	 For Testing 	***/
-						calcedOffset = 1.5;
-
-						if (i == 0) {
-							follower1.position.set(calcX, 0, calcZ);
-							console.log(follower1.positon);
-						}
-						/*****************************************************************/
-
-						this.offsets[i] += 4;
+						this.offsets[i] += 5;
 
 						goals[i].set(calcX, calcY, calcZ);
 
@@ -914,6 +908,11 @@
 				);
 			};
 
+			/***	Default starting values for gait	***/
+
+			var defaultStepDis = 5;
+			var defaultStepHeight = 4;
+
 			calcAngles();
 			updateAssembly();
 
@@ -929,8 +928,8 @@
 					(points / 6) * 3,
 				],
 				1,
-				0,
-				0,
+				defaultStepDis,
+				defaultStepHeight,
 				0,
 				0,
 				1
