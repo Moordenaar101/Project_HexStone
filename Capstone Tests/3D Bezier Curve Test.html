@@ -98,6 +98,7 @@
 				"Control Y": 8,
 				"Control Z": 0,
 				"Control Angle": 0,
+				"Turn Angle": 0,
 			};
 
 			folder1.add(settings, "Animate").onChange(function (bool) {
@@ -123,7 +124,13 @@
 			folder1
 				.add(settings, "Control Angle", -180, 180, 1)
 				.onChange(function (val) {
-					angle = THREE.MathUtils.degToRad(val);
+					strafAngle = THREE.MathUtils.degToRad(val);
+				});
+
+			folder1
+				.add(settings, "Turn Angle", -180, 180, 1)
+				.onChange(function (val) {
+					turnAngle = THREE.MathUtils.degToRad(val);
 				});
 
 			let startGeometry = new THREE.SphereGeometry(0.25, 32, 32);
@@ -168,6 +175,12 @@
 
 			scene.add(follower2);
 
+			let pivotGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+			let pivotMaterial = new THREE.MeshPhongMaterial({ color: "white" });
+			let pivot = new THREE.Mesh(follower2Geometry, follower2Material);
+
+			scene.add(pivot);
+
 			let follow1X = 0;
 			let follow1Y = 0;
 			let follow1Z = 0;
@@ -176,7 +189,9 @@
 			let follow2Z = 0;
 
 			let t = 0;
-			let angle = 0;
+			let strafAngle = 0;
+			let turnAngle = 0;
+			let radii = 0;
 			let startOffset = 0;
 			let endOffset = 0;
 			let controlOffset = 0;
@@ -194,45 +209,38 @@
 			let direction = true;
 			let animate = true;
 
-			class gaits {
-				constructor(stepDis, stepHeight, bend, angle, speed, readyToMove) {
-					this.stepDis = stepDis;
-					this.stepHeight = stepHeight;
-					this.bend = bend;
-					this.angle = angle;
-					this.speed = speed;
-				}
-			}
-
 			// Render Loop
 			let render = function () {
 				requestAnimationFrame(render);
 
+				if (radii <= 0 || radii >= 0) {
+				}
+
 				start.position.x =
-					Math.cos(angle) * (startOrigin.x + startOffset - origin.x) -
-					Math.sin(angle) * (startOrigin.z - origin.z) +
+					Math.cos(strafAngle) * (startOrigin.x + startOffset - origin.x) -
+					Math.sin(strafAngle) * (startOrigin.z - origin.z) +
 					origin.x;
 				start.position.z =
-					Math.sin(angle) * (startOrigin.x + startOffset - origin.x) +
-					Math.cos(angle) * (startOrigin.z - origin.z) +
+					Math.sin(strafAngle) * (startOrigin.x + startOffset - origin.x) +
+					Math.cos(strafAngle) * (startOrigin.z - origin.z) +
 					origin.z;
 
 				end.position.x =
-					Math.cos(angle) * (endOrigin.x + endOffset - origin.x) -
-					Math.sin(angle) * (endOrigin.z - origin.z) +
+					Math.cos(strafAngle) * (endOrigin.x + endOffset - origin.x) -
+					Math.sin(strafAngle) * (endOrigin.z - origin.z) +
 					origin.x;
 				end.position.z =
-					Math.sin(angle) * (endOrigin.x + endOffset - origin.x) +
-					Math.cos(angle) * (endOrigin.z - origin.z) +
+					Math.sin(strafAngle) * (endOrigin.x + endOffset - origin.x) +
+					Math.cos(strafAngle) * (endOrigin.z - origin.z) +
 					origin.z;
 
 				control.position.x =
-					Math.cos(angle) * (origin.x - origin.x) -
-					Math.sin(angle) * (controlOffset - origin.z) +
+					Math.cos(strafAngle) * (origin.x - origin.x) -
+					Math.sin(strafAngle) * (controlOffset - origin.z) +
 					origin.x;
 				control.position.z =
-					Math.sin(angle) * (origin.x - origin.x) +
-					Math.cos(angle) * (controlOffset - origin.z) +
+					Math.sin(strafAngle) * (origin.x - origin.x) +
+					Math.cos(strafAngle) * (controlOffset - origin.z) +
 					origin.z;
 
 				startX = start.position.x;

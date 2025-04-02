@@ -147,10 +147,13 @@
 					Model: true,
 					"Stability Polygon": true,
 					"Animate Model": true,
+					"Debug Shape": false,
+					"Debug Shape Position": 0,
 					"Chassis Height": 3.5,
 					"Step Length": 5,
 					"Step Height": 4,
 					"Straif Angle": 0,
+					"Turn Threshold": 0,
 					"Joint Diameter": 0.5,
 					"Leg Diameter": 0.25,
 					"Endpoint Diameter": 0.1,
@@ -171,6 +174,20 @@
 						bool
 							? (currentGait.stabMesh.material.opacity = 0.35)
 							: (currentGait.stabMesh.material.opacity = 0);
+					});
+				folder1
+					.add(settings, "Debug Shape")
+					.listen()
+					.onChange(function (bool) {
+						bool
+							? (currentGait.debugShape.material.opacity = 1)
+							: (currentGait.debugShape.material.opacity = 0);
+					});
+				folder1
+					.add(settings, "Debug Shape Position", 0, 5, 1)
+					.listen()
+					.onChange(function (val) {
+						currentGait.debugShapePos = val;
 					});
 				folder2
 					.add(settings, "Animate Model")
@@ -204,6 +221,13 @@
 					.listen()
 					.onChange(function (val) {
 						rippleGait.straifAngle = MathUtils.degToRad(val);
+					});
+				folder2
+					.add(settings, "Turn Threshold", -100, 100, 1)
+					.listen()
+					.onChange(function (val) {
+						rippleGait.turnThreshold = val;
+						centerPoint.position.x = val;
 					});
 				folder3
 					.add(settings, "Joint Diameter", 0.1, 5, 0.1)
@@ -403,6 +427,16 @@
 				});
 			};
 
+			/***	Center Point Test Shape	   ***/
+			const centerPoint = new THREE.Mesh(
+				new THREE.SphereGeometry(0.25, 32, 32),
+				new THREE.MeshBasicMaterial({
+					color: 0xffffff,
+					name: "Debug Shape",
+				})
+			);
+			scene.add(centerPoint);
+
 			// Bezier curve control points
 
 			let start = new THREE.Vector3(6, 0, 5);
@@ -420,14 +454,38 @@
 					this.onGround = Array(6).fill(true);
 					this.centerPoint = new THREE.Vector3();
 					this.stabilityPolygon = [];
+					this.debugShapePos = 0;
+					this.debugShape = this.initDebugShape();
 					this.initStabilityPolygon();
 
 					/*** Movement Parameters ***/
 					this.stepDis = stepDis;
 					this.stepHeight = stepHeight;
-					this.turnAngle = 0;
 					this.straifAngle = 0;
+					this.turnThreshold = 0;
+					this.turnRadius = 0;
+					this.turnPoint = new THREE.Vector3();
 					this.speed = speed;
+				}
+
+				initDebugShape() {
+					const debugShape = new THREE.Mesh(
+						new THREE.SphereGeometry(0.75, 32, 32),
+						new THREE.MeshBasicMaterial({
+							color: 0xffff00,
+							transparent: true,
+							opacity: 0,
+							name: "Debug Shape",
+						})
+					);
+					scene.add(debugShape);
+					return debugShape;
+				}
+
+				updateDebugShape() {
+					let tempVect = new THREE.Vector3();
+					legParts[this.debugShapePos][5].getWorldPosition(tempVect);
+					this.debugShape.position.set(tempVect.x, tempVect.y, tempVect.z);
 				}
 
 				initStabilityPolygon() {
@@ -455,7 +513,16 @@
 					scene.add(this.stabMesh);
 				}
 
-				updateGoalPosition(i, calcedOffset, start, control, end, isGrounded) {
+				updateGoalPosition(
+					i,
+					calcedOffset,
+					start,
+					control,
+					end,
+					isGrounded,
+					turnThreshold,
+					stepDis
+				) {
 					const calcPointOnGround = (p1, p2, p3) =>
 						(calcedOffset - 1) * (calcedOffset - 1) * p1 +
 						2 * (calcedOffset - 1) * (1 - (calcedOffset - 1)) * p2 +
@@ -472,6 +539,44 @@
 							(control.y * (this.stepHeight / defaultStepHeight)) +
 						calcedOffset * calcedOffset * (-1 - chassisHeight);
 
+					// hipStance = [
+					// 	[12, 10],
+					// 	[18, 0],
+					// 	[12, -10],
+					// ];
+
+					const calcTurnOffsets = function (index) {
+						const radius = getRadiusToFoot();
+
+						// Check if the radius is zero or invalid, return [0, 0]
+						if (radius === 0) {
+							return 0;
+						}
+
+						// Calculate the angle of the turn, x, and y offset
+						// using step distance and radius
+						const angle = stepDis / 2 / radius;
+
+						const xOffset = radius * Math.cos(stepDis / 2 / radius);
+
+						const zOffset = radius * Math.sin(stepDis / 2 / radius);
+
+						// Return the offsets as an array [xOffset, yOffset]
+						return (index = 0 ? xOffset : zOffset);
+					};
+
+					// Can't think right now. Need to calc the radius from turnThreshold to
+					// the centerpoint of the leg gait (try to use the control point's vector)
+					// then with the radius do something. maybe with control point on radius
+					// you can bend line to curve. need to test... sleep....................
+					const getRadiusToFoot = function () {
+						let radius = 0;
+						if (i == 0 || i == 5) {
+							radius = (12 - turnThreshold) / (10 - 0);
+						}
+						return;
+					};
+
 					const calcX = isGrounded
 						? calcPointOnGround(start.x, control.x, end.x)
 						: calcPoint(start.x, control.x, end.x);
@@ -485,12 +590,32 @@
 				}
 
 				walkCycle() {
+					this.updateDebugShape();
 					const gaitRatio = 1 - 4 / 6;
 
 					legGroups.forEach((_, i) => {
 						if (this.offsets[i] > 1000) this.offsets[i] = 0;
 
-						const straif = this.straifAngle * (i < 3 ? -1 : 1);
+						const calculateStraif = function (
+							index,
+							straifAngle,
+							turnThreshold
+						) {
+							const turnVect = new THREE.Vector3();
+							legParts[i][5].getWorldPosition(turnVect);
+							straifAngle +=
+								Math.atan2(turnVect.x - turnThreshold, turnVect.z) *
+								(index < 3 ? 1 : -1);
+							// console.log(straifAngle);
+							straifAngle * (index < 3 ? 1 : -1);
+							return straifAngle;
+						};
+
+						const straif = calculateStraif(
+							i,
+							this.straifAngle,
+							this.turnThreshold
+						);
 
 						// Recalculate positions based on the straif angle
 						const calculatePositionX = (origin) =>
@@ -521,12 +646,54 @@
 							start,
 							control,
 							end,
-							isGrounded
+							isGrounded,
+							this.turnThreshold,
+							this.straifAngle,
+							this.stepDis
 						);
 						this.offsets[i] += 5;
 						this.onGround[i] = isGrounded;
 					});
 				}
+
+				/*
+				* Wrap a straight line around a circle, maintaining its original length as the arc length.
+				*
+				* @param {number} radius - Radius of the circle.
+				* @param {number} straightLineLength - Length of the straight line (arc length when wrapped).
+				* @param {number} startAngle - Starting angle in radians (default: 0).
+				* @param {number} centerX - X-coordinate of the circle's center (default: 0).
+				* @param {number} centerY - Y-coordinate of the circle's center (default: 0).
+				* @returns {Object} Coordinates of the new point ({x, y}).
+				*
+				*
+				function wrapLineAroundCircle(radius, straightLineLength, startAngle = 0, centerX = 0, centerY = 0) {
+					// Calculate the angle subtended by the arc
+					const angleStep = straightLineLength / radius;
+
+					// Calculate the new angle
+					const newAngle = startAngle + angleStep;
+
+					// Calculate the new coordinates on the circle
+					const x = centerX + radius * Math.cos(newAngle);
+					const y = centerY + radius * Math.sin(newAngle);
+
+					return { x, y };
+				}
+
+				// Example usage:
+				const radius = 10; // Radius of the circle
+				const straightLineLength = 15; // Straight line length (arc length)
+				const startAngle = 0; // Starting angle in radians
+				const centerX = 0;
+				const centerY = 0;
+
+				// Calculate the wrapped point
+				const wrappedPoint = wrapLineAroundCircle(radius, straightLineLength, startAngle, centerX, centerY);
+
+				console.log("Wrapped Point:", wrappedPoint);
+
+				*/
 
 				checkStability() {
 					this.stabilityPolygon = [];
