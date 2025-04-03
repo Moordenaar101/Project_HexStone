@@ -36,7 +36,11 @@
 			// General Global Variables
 			// ------------------------------------------------
 
-			let debug = false; // Enable to print Debug info to console
+			let debug = false; // Enable to print Debug info to console (Doesnt do much yet)
+
+			// Set to true after the first loop of the program.
+			// this is purly for visual purposes
+			let firstLoop = false;
 
 			// ------------------------------------------------
 			// Global Paramerters
@@ -77,7 +81,7 @@
 					1000
 				);
 
-				camera.position.set(25, 25, 35);
+				camera.position.set(35, 20, 30);
 
 				scene = new THREE.Scene();
 
@@ -136,7 +140,7 @@
 
 				let settings;
 
-				const folder1 = panel.addFolder("Visibility");
+				const folder1 = panel.addFolder("Debug");
 				const folder2 = panel.addFolder("Motion");
 				const folder3 = panel.addFolder("Size Parameters");
 				let t = 1;
@@ -145,8 +149,10 @@
 					Model: true,
 					"Stability Polygon": true,
 					"Animate Model": true,
-					"Debug Shape": false,
-					"Debug Shape Position": 0,
+					"Debug Object": false,
+					"Debug Object Position": 0,
+					"Path Visualizer": true,
+					"Path Visualizer Position": 0,
 					"Chassis Height": 3.5,
 					"Step Length": 5,
 					"Step Height": 4,
@@ -174,7 +180,7 @@
 							: (currentGait.stabMesh.material.opacity = 0);
 					});
 				folder1
-					.add(settings, "Debug Shape")
+					.add(settings, "Debug Object")
 					.listen()
 					.onChange(function (bool) {
 						bool
@@ -182,10 +188,22 @@
 							: (currentGait.debugShape.material.opacity = 0);
 					});
 				folder1
-					.add(settings, "Debug Shape Position", 0, 5, 1)
+					.add(settings, "Debug Object Position", 0, 5, 1)
 					.listen()
 					.onChange(function (val) {
 						currentGait.debugShapePos = val;
+					});
+				folder1
+					.add(settings, "Path Visualizer")
+					.listen()
+					.onChange(function (val) {
+						val == false ? footVisualizer.hide() : footVisualizer.show();
+					});
+				folder1
+					.add(settings, "Path Visualizer Position", 0, 5, 1)
+					.listen()
+					.onChange(function (val) {
+						footVisualizer.changeObject(legParts[val][5]);
 					});
 				folder2
 					.add(settings, "Animate Model")
@@ -397,14 +415,49 @@
 					);
 
 					// Give the legs a default position
-					goals.push(new THREE.Vector3(6, -4.5, 0));
+					goals.push(
+						i < 3
+							? new THREE.Vector3(
+									legParts[i][0].getWorldPosition(new THREE.Vector3()).x + 6,
+									0,
+									legParts[i][0].getWorldPosition(new THREE.Vector3()).z
+							  )
+							: new THREE.Vector3(
+									legParts[i][0].getWorldPosition(new THREE.Vector3()).x - 6,
+									0,
+									legParts[i][0].getWorldPosition(new THREE.Vector3()).z
+							  )
+					);
 				}
 			}
+
+			const gaitBDC = (index, gaitOffset = [6, 0, 0]) => {
+				// Returns the offset Position of the gait BDC (Bottom Dead Center) for a given leg index.
+				// index = leg #, gaitOffset = offset from the leg pivot to the gait
+				// center point.
+				let indexPos = legGroups[index][2].getWorldPosition(
+					new THREE.Vector3()
+				);
+
+				let gaitCenterPoint =
+					index < 3
+						? new THREE.Vector3(
+								indexPos.x + gaitOffset[0],
+								indexPos.y + gaitOffset[1],
+								indexPos.z + gaitOffset[2]
+						  )
+						: new THREE.Vector3(
+								indexPos.x - gaitOffset[0],
+								indexPos.y + gaitOffset[1],
+								indexPos.z + gaitOffset[2]
+						  );
+				return gaitCenterPoint;
+			};
 
 			/****	Note	*****
 
 			To convert the inverse kinematics function to
-			use world coordinates, I need to simple make
+			use world coordinates, I need to simply make
 			an array, or helper function to get the required
 			x,y,z offset to each leg. -CHANGEME!
 
@@ -413,8 +466,12 @@
 			// Inverse kinematics
 			const calcAngles = () => {
 				jointAngles = goals.map((goal, i) => {
-					const pivotPosition = legParts[i][0].position;
-					const hipPosition = legParts[i][1].position;
+					const pivotPosition = legParts[i][0].getWorldPosition(
+						new THREE.Vector3()
+					);
+					const hipPosition = legParts[i][1].getWorldPosition(
+						new THREE.Vector3()
+					);
 
 					// Calculate the distance from the pivot to the goal
 					const xDistance = goal.x - pivotPosition.x;
@@ -477,7 +534,7 @@
 					// Update rotations
 					tibiaGroup.rotation.z = joint3 - Math.PI;
 					hipGroup.rotation.z = joint2;
-					pivotGroup.rotation.y = i > 2 ? -joint1 + Math.PI : joint1;
+					pivotGroup.rotation.y = joint1;
 				});
 			};
 
@@ -491,16 +548,54 @@
 			);
 			scene.add(centerPoint);
 
-			// try to use an Object3D as the gait control points. This will allow the use of Three.js functions. -CHANGEME!
+			/***********************************************************/
+			//	Startup  //
+
+			var defaultStepDis = 5;
+			var defaultStepHeight = 4;
+			let chassisHeight = 3.5;
+
+			generateLegs(1);
+			calcAngles();
+			updateAssembly();
+
+			/***********************************************************/
+
+			// try to use an Object3D as the gait control points. This
+			// will allow the use of Three.js functions. -CHANGEME!
 
 			// Bezier curve control points
 
-			let start = new THREE.Vector3(6, 0, 5);
-			let end = new THREE.Vector3(6, 0, -5);
-			let control = new THREE.Vector3(6, 4, 0);
-			let calcX, calcY, calcZ;
-			let startOrigin = start.clone();
-			let endOrigin = end.clone();
+			let gaitCenterPoints = [],
+				gaitStartPoints = [],
+				gaitEndPoints = [];
+
+			for (let i = 0; i < 6; i++) {
+				gaitCenterPoints[i] = new THREE.Object3D().position.set(
+					gaitBDC(i).x,
+					gaitBDC(i).y,
+					gaitBDC(i).z
+				);
+
+				gaitStartPoints[i] = new THREE.Object3D().position.set(
+					gaitBDC(i).x,
+					gaitBDC(i).y,
+					gaitBDC(i).z + 5 / 2
+				);
+
+				gaitEndPoints[i] = new THREE.Object3D().position.set(
+					gaitBDC(i).x,
+					gaitBDC(i).y,
+					gaitBDC(i).z - 5 / 2
+				);
+			}
+
+			// let start = new THREE.Vector3(6, 0, 5);
+			// let end = new THREE.Vector3(6, 0, -5);
+			// let control = new THREE.Vector3(6, 4, 0);
+			// let calcX, calcY, calcZ;
+			// let startOrigin = start.clone();
+			// let endOrigin = end.clone();
 
 			class Gait {
 				constructor(name, offsets, maxSpeed, stepDis, stepHeight, speed) {
@@ -582,56 +677,30 @@
 							legPosition.z
 						);
 					}
-
-					const calcTurningOffset = function (index, calcZ, turnPoint) {
-						const gaitCenterPoint = calculateGaitCenterPoint(control, index);
-						const radius = gaitCenterPoint.distanceTo(turnPoint);
-						const currentPosition = new THREE.Vector3(
-							gaitCenterPoint.x,
-							0,
-							gaitCenterPoint.z + calcZ
-						);
-
-						const d = gaitCenterPoint.distanceTo(currentPosition);
-
-						const worldArcPoint = calcArcPoint(
-							turnPoint,
-							radius,
-							d,
-							gaitCenterPoint
-						);
-
-						// console.log(worldArcPoint);
-
-						return {
-							x: currentPosition.x - worldArcPoint.x,
-							z: currentPosition.z - worldArcPoint.z,
-						};
-					};
 					// Function to calculate arc length, end point, and subtended angle
-					function calcArcPoint(turnPoint, r, d, gaitCenterPoint) {
-						// Step 1: Calculate the subtended angle (theta_arc)
-						const theta_arc = 2 * Math.asin(d / (2 * r));
+					// function calcArcPoint(turnPoint, r, d, gaitCenterPoint) {
+					// 	// Step 1: Calculate the subtended angle (theta_arc)
+					// 	const theta_arc = 2 * Math.asin(d / (2 * r));
 
-						// Step 2: Calculate the starting angle (theta_start)
-						const theta_start = Math.atan2(
-							gaitCenterPoint.z - turnPoint.z,
-							gaitCenterPoint.x - turnPoint.x
-						);
+					// 	// Step 2: Calculate the starting angle (theta_start)
+					// 	const theta_start = Math.atan2(
+					// 		gaitCenterPoint.z - turnPoint.z,
+					// 		gaitCenterPoint.x - turnPoint.x
+					// 	);
 
-						// Step 3: Calculate the ending angle (theta_end)
-						const theta_end = theta_start + theta_arc;
+					// 	// Step 3: Calculate the ending angle (theta_end)
+					// 	const theta_end = theta_start + theta_arc;
 
-						// Step 4: Calculate the end point coordinates (x_end, y_end)
-						const x_end = turnPoint.x + r * Math.cos(theta_end);
-						const z_end = turnPoint.z + r * Math.sin(theta_end);
+					// 	// Step 4: Calculate the end point coordinates (x_end, y_end)
+					// 	const x_end = turnPoint.x + r * Math.cos(theta_end);
+					// 	const z_end = turnPoint.z + r * Math.sin(theta_end);
 
-						// Return results
-						return {
-							x: x_end,
-							z: z_end,
-						};
-					}
+					// 	// Return results
+					// 	return {
+					// 		x: x_end,
+					// 		z: z_end,
+					// 	};
+					// }
 
 					if (
 						this.turnThreshold > 99 ||
@@ -644,24 +713,34 @@
 					legGroups.forEach((_, i) => {
 						if (this.offsets[i] > 1000) this.offsets[i] = 0;
 
-						const straif = this.straifAngle * (i < 3 ? 1 : -1);
+						const straif = this.straifAngle;
 
-						// Recalculate positions based on the straif angle
-						const calculatePositionX = (origin) =>
-							Math.cos(straif) * (origin.x - control.x) +
-							Math.sin(straif) *
-								(origin.z * (this.stepDis / 2 / defaultStepDis) - control.z) +
-							control.x;
-						const calculatePositionZ = (origin) =>
-							Math.sin(straif) * (origin.x - control.x) -
-							Math.cos(straif) *
-								(origin.z * (this.stepDis / 2 / defaultStepDis) - control.z) +
-							control.z;
+						// Recalculate positions of start and end positions
+						// based on the straif angle.
 
-						start.x = calculatePositionX(startOrigin);
-						start.z = calculatePositionZ(startOrigin);
-						end.x = calculatePositionX(endOrigin);
-						end.z = calculatePositionZ(endOrigin);
+						let startOrigin = gaitCenterPoints[i];
+						startOrigin.y = 0;
+						let endOrigin = gaitCenterPoints[i];
+						endOrigin.y = 0;
+
+						gaitStartPoints[i].x =
+							Math.cos(straif) * (startOrigin.x - gaitCenterPoints[i].x) +
+							Math.sin(straif) * (startOrigin.z - 2.5 - gaitCenterPoints[i].z) +
+							gaitCenterPoints[i].x;
+
+						gaitStartPoints[i].z =
+							Math.sin(straif) * (startOrigin.x - gaitCenterPoints[i].x) -
+							Math.cos(straif) * (startOrigin.z - 2.5 - gaitCenterPoints[i].z) +
+							gaitCenterPoints[i].z;
+
+						gaitEndPoints[i].x =
+							Math.cos(straif) * (endOrigin.x - gaitCenterPoints[i].x) +
+							Math.sin(straif) * (endOrigin.z + 2.5 - gaitCenterPoints[i].z) +
+							gaitCenterPoints[i].x;
+						gaitEndPoints[i].z =
+							Math.sin(straif) * (endOrigin.x - gaitCenterPoints[i].x) -
+							Math.cos(straif) * (endOrigin.z + 2.5 - gaitCenterPoints[i].z) +
+							gaitCenterPoints[i].z;
 
 						const calcedRatio = this.offsets[i] / (points / 2);
 						const isGrounded = calcedRatio > 2 * gaitRatio;
@@ -669,46 +748,45 @@
 							? mapVal(calcedRatio, 2 * gaitRatio, 2, 1, 2)
 							: mapVal(calcedRatio, 0, 2 * gaitRatio, 0, 1);
 
-						// console.log(calcedOffset);
-						function calcPointOnGroundArc(start, end, center, t) {
-							// Just cuz
-							t--;
+						// function calcPointOnGroundArc(start, end, center, t) {
+						// 	// Just cuz
+						// 	t--;
 
-							const tempVect = new THREE.Vector3();
+						// 	const tempVect = new THREE.Vector3();
 
-							legParts[i][0].getWorldPosition(tempVect);
+						// 	legParts[i][0].getWorldPosition(tempVect);
 
-							//Kinda works. Should make better use of world coordinates though...
-							if (i < 3) {
-								center[0] = center[0] - tempVect.x;
-								center[1] = center[1] - tempVect.z;
-							} else {
-								center[0] = center[0] + tempVect.x;
-								center[1] = center[1] + tempVect.z;
-							}
+						// 	//Kinda works. Should make better use of world coordinates though...
+						// 	if (i < 3) {
+						// 		center[0] = center[0] - tempVect.x;
+						// 		center[1] = center[1] - tempVect.z;
+						// 	} else {
+						// 		center[0] = center[0] + tempVect.x;
+						// 		center[1] = center[1] + tempVect.z;
+						// 	}
 
-							const startAngle = Math.atan2(
-								start[1] - center[1],
-								start[0] - center[0]
-							);
-							let endAngle = Math.atan2(end[1] - center[1], end[0] - center[0]);
+						// 	const startAngle = Math.atan2(
+						// 		start[1] - center[1],
+						// 		start[0] - center[0]
+						// 	);
+						// 	let endAngle = Math.atan2(end[1] - center[1], end[0] - center[0]);
 
-							// Ensure angle continuity
-							if (endAngle < startAngle) {
-								endAngle += 2 * Math.PI;
-							}
+						// 	// Ensure angle continuity
+						// 	if (endAngle < startAngle) {
+						// 		endAngle += 2 * Math.PI;
+						// 	}
 
-							const angle = (1 - t) * endAngle + t * startAngle;
+						// 	const angle = (1 - t) * endAngle + t * startAngle;
 
-							const radius = Math.sqrt(
-								(start[0] - center[0]) ** 2 + (start[1] - center[1]) ** 2
-							);
+						// 	const radius = Math.sqrt(
+						// 		(start[0] - center[0]) ** 2 + (start[1] - center[1]) ** 2
+						// 	);
 
-							const x = center[0] + radius * Math.cos(angle);
-							const y = center[1] + radius * Math.sin(angle);
+						// 	const x = center[0] + radius * Math.cos(angle);
+						// 	const y = center[1] + radius * Math.sin(angle);
 
-							return [x, y];
-						}
+						// 	return [x, y];
+						// }
 						const calcPointOnGround = (p1, p2, p3) =>
 							(calcedOffset - 1) * (calcedOffset - 1) * p1 +
 							2 * (calcedOffset - 1) * (1 - (calcedOffset - 1)) * p2 +
@@ -718,50 +796,44 @@
 							2 * (1 - calcedOffset) * calcedOffset * p2 +
 							calcedOffset * calcedOffset * p3;
 						const calcPointY = () =>
-							(1 - calcedOffset) * (1 - calcedOffset) * (-1 - chassisHeight) +
-							2 *
-								(1 - calcedOffset) *
-								calcedOffset *
-								(control.y * (this.stepHeight / defaultStepHeight)) +
-							calcedOffset * calcedOffset * (-1 - chassisHeight);
+							2 * (1 - calcedOffset) * calcedOffset * (this.stepHeight * 2) +
+							calcedOffset ** 2 * 0;
 
 						let calcX = isGrounded
-							? calcPointOnGroundArc(
-									[start.x, start.z],
-									[end.x, end.z],
-									[this.turnThreshold, control.z],
-									calcedOffset
-							  )[0]
-							: calcPoint(start.x, control.x, end.x);
+							? calcPointOnGround(
+									gaitStartPoints[i].x,
+									gaitCenterPoints[i].x,
+									gaitEndPoints[i].x
+							  )
+							: calcPoint(
+									gaitStartPoints[i].x,
+									gaitCenterPoints[i].x,
+									gaitEndPoints[i].x
+							  );
+
 						let calcZ = isGrounded
-							? calcPointOnGroundArc(
-									[start.x, start.z],
-									[end.x, end.z],
-									[this.turnThreshold, control.z],
-									calcedOffset
-							  )[1]
-							: calcPoint(start.z, control.z, end.z);
-						const calcY = isGrounded ? -1 - chassisHeight : calcPointY();
+							? calcPointOnGround(
+									gaitStartPoints[i].z,
+									gaitCenterPoints[i].z,
+									gaitEndPoints[i].z
+							  )
+							: calcPoint(
+									gaitStartPoints[i].z,
+									gaitCenterPoints[i].z,
+									gaitEndPoints[i].z
+							  );
 
-						// let [calcX, calcZ] = calcPointOnGroundArc(
-						// 	[start.x, start.z],
-						// 	[end.x, end.z],
-						// 	[control.x, control.z],
-						// 	calcedOffset
-						// )
+						// console.log(
+						// 	i,
+						// 	gaitStartPoints[i],
+						// 	gaitCenterPoints[i],
+						// 	gaitEndPoints[i],
+						// 	legParts[i][5].getWorldPosition(new THREE.Vector3())
+						// );
 
-						/***   Testing   ***/
+						const calcY = isGrounded ? 0 : calcPointY();
 
-						// if(this.turnPoint.x !== 100 || this.turnPoint.x !== -100) {
-						// 	const turningOffset = calcTurningOffset(i, -calcZ, this.turnPoint);
-						// 	calcX += turningOffset.x;
-						// 	calcZ += turningOffset.z;
-						// }
-						// console.log(calcX, calcZ);
-
-						/***             ***/
-
-						goals[i].set(calcX, calcY, -calcZ);
+						goals[i].set(calcX, calcY, calcZ);
 						legParts[i][5].material.color.set(isGrounded ? "blue" : "red");
 
 						this.offsets[i] += 5;
@@ -817,12 +889,12 @@
 				}
 
 				visualizeStability() {
-					const vectArray = this.getLegWorldPositions();
+					const vectArray = this.getLegWorldPositions2D();
 					this.interpolateOffGroundLegs(vectArray);
 					this.updateStabilityMesh(vectArray);
 				}
 
-				getLegWorldPositions() {
+				getLegWorldPositions2D() {
 					return legParts.map((leg) => {
 						const tempPos = new THREE.Vector3();
 						leg[5].getWorldPosition(tempPos);
@@ -873,14 +945,6 @@
 
 			/***	Default starting values for gait	***/
 
-			var defaultStepDis = 5;
-			var defaultStepHeight = 4;
-			let chassisHeight = 3.5;
-
-			generateLegs(1);
-			calcAngles();
-			updateAssembly();
-
 			let points = 1000;
 			const rippleGait = new Gait(
 				"ripple",
@@ -900,8 +964,10 @@
 
 			let currentGait = rippleGait;
 
+			// When given an object, this class will visualize the path of the object
+			// as it moves through space with a line.
 			class PathVisualizer {
-				constructor(object, scene, maxPoints = 1000, color) {
+				constructor(object, scene, maxPoints = 1000, color = 0xfff0000) {
 					this.object = object;
 					this.scene = scene;
 					this.maxPoints = maxPoints;
@@ -920,42 +986,70 @@
 					});
 
 					this.line = new THREE.Line(geometry, material);
+
+					// Start the line at the object's current position
+					this.reset();
+
 					this.scene.add(this.line);
 				}
 
+				// Update the line positions.
 				update() {
-					const position = new THREE.Vector3();
-					this.object.getWorldPosition(position);
+					if (this.line.visible) {
+						const position = new THREE.Vector3();
+						this.object.getWorldPosition(position);
 
-					// Shift positions to the left
-					for (let i = 0; i < this.maxPoints - 1; i++) {
-						this.positions[i * 3] = this.positions[(i + 1) * 3];
-						this.positions[i * 3 + 1] = this.positions[(i + 1) * 3 + 1];
-						this.positions[i * 3 + 2] = this.positions[(i + 1) * 3 + 2];
+						// Shift positions to the left.
+						for (let i = 0; i < this.maxPoints - 1; i++) {
+							this.positions[i * 3] = this.positions[(i + 1) * 3];
+							this.positions[i * 3 + 1] = this.positions[(i + 1) * 3 + 1];
+							this.positions[i * 3 + 2] = this.positions[(i + 1) * 3 + 2];
+						}
+
+						// Set the last position to the current position.
+						this.positions[(this.maxPoints - 1) * 3] = position.x;
+						this.positions[(this.maxPoints - 1) * 3 + 1] = position.y;
+						this.positions[(this.maxPoints - 1) * 3 + 2] = position.z;
+
+						this.line.geometry.attributes.position.needsUpdate = true;
 					}
+				}
 
-					// Set the last position to the current position
-					this.positions[(this.maxPoints - 1) * 3] = position.x;
-					this.positions[(this.maxPoints - 1) * 3 + 1] = position.y;
-					this.positions[(this.maxPoints - 1) * 3 + 2] = position.z;
+				changeObject(object) {
+					this.object = object;
+					this.reset();
+				}
 
-					this.line.geometry.attributes.position.needsUpdate = true;
+				hide() {
+					//Hides the line from view.
+					this.line.visible = false;
+				}
+
+				show() {
+					this.line.visible = true;
+					this.reset();
+				}
+
+				reset() {
+					for (let i = 0; i < this.maxPoints; i++) {
+						const worldPosition = new THREE.Vector3();
+						this.object.getWorldPosition(worldPosition);
+						this.positions[i * 3] = worldPosition.x;
+						this.positions[i * 3 + 1] = worldPosition.y;
+						this.positions[i * 3 + 2] = worldPosition.z;
+					}
 				}
 			}
 
-			const footVisualizer = new PathVisualizer(
-				legParts[0][5],
-				scene,
-				250,
-				0xff0000
-			);
+			// Initialize the object path visualizer on the foot of leg 0.
+			const footVisualizer = new PathVisualizer(legParts[0][5], scene, 250);
 
-			// Render Loop
+			// Render Loop.
 			let render = function () {
 				requestAnimationFrame(render);
 
 				if (animateModel) {
-					calcAngles(12, 1);
+					calcAngles();
 					updateAssembly();
 
 					rippleGait.updateWalkCycle();
@@ -963,6 +1057,8 @@
 					rippleGait.visualizeStability();
 
 					footVisualizer.update();
+
+					// console.log(goals);
 				}
 
 				// Render the scene
