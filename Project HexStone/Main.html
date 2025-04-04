@@ -548,9 +548,7 @@
 			);
 			scene.add(centerPoint);
 
-			/***********************************************************/
 			//	Startup  //
-
 			var defaultStepDis = 5;
 			var defaultStepHeight = 4;
 			let chassisHeight = 3.5;
@@ -558,11 +556,6 @@
 			generateLegs(1);
 			calcAngles();
 			updateAssembly();
-
-			/***********************************************************/
-
-			// try to use an Object3D as the gait control points. This
-			// will allow the use of Three.js functions. -CHANGEME!
 
 			// Bezier curve control points
 
@@ -590,12 +583,8 @@
 				);
 			}
 
-			// let start = new THREE.Vector3(6, 0, 5);
-			// let end = new THREE.Vector3(6, 0, -5);
-			// let control = new THREE.Vector3(6, 4, 0);
-			// let calcX, calcY, calcZ;
-			// let startOrigin = start.clone();
-			// let endOrigin = end.clone();
+			let newgaitStartPoints = [0, 0, 0, 0, 0, 0];
+			let newgaitEndPoints = [0, 0, 0, 0, 0, 0];
 
 			class Gait {
 				constructor(name, offsets, maxSpeed, stepDis, stepHeight, speed) {
@@ -677,30 +666,6 @@
 							legPosition.z
 						);
 					}
-					// Function to calculate arc length, end point, and subtended angle
-					// function calcArcPoint(turnPoint, r, d, gaitCenterPoint) {
-					// 	// Step 1: Calculate the subtended angle (theta_arc)
-					// 	const theta_arc = 2 * Math.asin(d / (2 * r));
-
-					// 	// Step 2: Calculate the starting angle (theta_start)
-					// 	const theta_start = Math.atan2(
-					// 		gaitCenterPoint.z - turnPoint.z,
-					// 		gaitCenterPoint.x - turnPoint.x
-					// 	);
-
-					// 	// Step 3: Calculate the ending angle (theta_end)
-					// 	const theta_end = theta_start + theta_arc;
-
-					// 	// Step 4: Calculate the end point coordinates (x_end, y_end)
-					// 	const x_end = turnPoint.x + r * Math.cos(theta_end);
-					// 	const z_end = turnPoint.z + r * Math.sin(theta_end);
-
-					// 	// Return results
-					// 	return {
-					// 		x: x_end,
-					// 		z: z_end,
-					// 	};
-					// }
 
 					if (
 						this.turnThreshold > 99 ||
@@ -715,13 +680,14 @@
 
 						const straif = this.straifAngle;
 
-						// Recalculate positions of start and end positions
-						// based on the straif angle.
-
+						// Remember the original start and end position before offsetting.
 						let startOrigin = gaitCenterPoints[i];
 						startOrigin.y = 0;
 						let endOrigin = gaitCenterPoints[i];
 						endOrigin.y = 0;
+
+						// Recalculate positions of start and end points
+						// based on the straif angle.
 
 						gaitStartPoints[i].x =
 							Math.cos(straif) * (startOrigin.x - gaitCenterPoints[i].x) +
@@ -741,6 +707,59 @@
 							Math.sin(straif) * (endOrigin.x - gaitCenterPoints[i].x) -
 							Math.cos(straif) * (endOrigin.z + 2.5 - gaitCenterPoints[i].z) +
 							gaitCenterPoints[i].z;
+
+						function adjustPointsToArc(
+							start,
+							center,
+							end,
+							arcCenter,
+							radius,
+							arcLength
+						) {
+							// Calculate the angle of the start and end point relative to the arc center
+							const offsetAngle = arcLength / 2 / radius;
+							const centerAngle = Math.atan2(
+								center.z - arcCenter.z,
+								center.x - arcCenter.x
+							);
+							// console.log(offsetAngle, centerAngle);
+
+							// Calculate the new start and end points on the arc
+							const newStart = new THREE.Vector3(
+								arcCenter.x + radius * Math.cos(centerAngle + offsetAngle),
+								start.y, // Preserve the original Y-coordinate
+								arcCenter.z + radius * Math.sin(centerAngle + offsetAngle)
+							);
+
+							const newEnd = new THREE.Vector3(
+								arcCenter.x + radius * Math.cos(centerAngle - offsetAngle),
+								end.y, // Preserve the original Y-coordinate
+								arcCenter.z + radius * Math.sin(centerAngle - offsetAngle)
+							);
+
+							// console.log(newStart, newEnd);
+
+							return { newStart, newEnd };
+						}
+
+						// Testing the arc adjustment function
+						const arcCenter = new THREE.Vector3(this.turnThreshold, 0, 0); // Define the arc center
+						const radius = gaitCenterPoints[0].distanceTo(arcCenter); // Calculate the radius
+
+						const { newStart, newEnd } = adjustPointsToArc(
+							gaitStartPoints[0],
+							gaitCenterPoints[0],
+							gaitEndPoints[0],
+							arcCenter,
+							radius,
+							this.stepDis
+						);
+						newgaitStartPoints[i] = newStart;
+						newgaitEndPoints[i] = newEnd;
+						// console.log(
+						// 	newgaitEndPoints,
+						// 	legParts[0][5].localToWorld(new THREE.Vector3())
+						// );
 
 						const calcedRatio = this.offsets[i] / (points / 2);
 						const isGrounded = calcedRatio > 2 * gaitRatio;
@@ -796,40 +815,31 @@
 							2 * (1 - calcedOffset) * calcedOffset * p2 +
 							calcedOffset * calcedOffset * p3;
 						const calcPointY = () =>
-							2 * (1 - calcedOffset) * calcedOffset * (this.stepHeight * 2) +
-							calcedOffset ** 2 * 0;
+							2 * (1 - calcedOffset) * calcedOffset * (this.stepHeight * 2);
 
 						let calcX = isGrounded
 							? calcPointOnGround(
-									gaitStartPoints[i].x,
+									newgaitStartPoints[i].x,
 									gaitCenterPoints[i].x,
-									gaitEndPoints[i].x
+									newgaitEndPoints[i].x
 							  )
 							: calcPoint(
-									gaitStartPoints[i].x,
+									newgaitStartPoints[i].x,
 									gaitCenterPoints[i].x,
-									gaitEndPoints[i].x
+									newgaitEndPoints[i].x
 							  );
 
 						let calcZ = isGrounded
 							? calcPointOnGround(
-									gaitStartPoints[i].z,
+									newgaitStartPoints[i].z,
 									gaitCenterPoints[i].z,
-									gaitEndPoints[i].z
+									newgaitEndPoints[i].z
 							  )
 							: calcPoint(
-									gaitStartPoints[i].z,
+									newgaitStartPoints[i].z,
 									gaitCenterPoints[i].z,
-									gaitEndPoints[i].z
+									newgaitEndPoints[i].z
 							  );
-
-						// console.log(
-						// 	i,
-						// 	gaitStartPoints[i],
-						// 	gaitCenterPoints[i],
-						// 	gaitEndPoints[i],
-						// 	legParts[i][5].getWorldPosition(new THREE.Vector3())
-						// );
 
 						const calcY = isGrounded ? 0 : calcPointY();
 
@@ -1047,7 +1057,6 @@
 			// Render Loop.
 			let render = function () {
 				requestAnimationFrame(render);
-
 				if (animateModel) {
 					calcAngles();
 					updateAssembly();
@@ -1057,10 +1066,7 @@
 					rippleGait.visualizeStability();
 
 					footVisualizer.update();
-
-					// console.log(goals);
 				}
-
 				// Render the scene
 				renderer.render(scene, camera);
 			};
