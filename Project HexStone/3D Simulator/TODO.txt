@@ -1,0 +1,41 @@
+Bugs:
+- Calculation error on refresh - the foot tracker starts at 0,0,0
+    leaving a red line from origin to foot at startup √
+- Calculation error while straifing. slight miss alignment.
+- Calculation error at beggining of gait start on leg 0?
+
+TODO:
+- Offest leg hips from chassis √
+
+- Background √
+
+- Gait
+    - Fine control of parameters
+    - overlap stop and start
+    - Covert gait to world coordinates
+    - convert the bottom bezier curve to an arc/line
+
+- More control features
+
+- Stability analysis
+    - CG warning √
+    - Dynamic Gait stabilization
+
+- Finish Model
+
+- Output readings live to user
+
+- Hexapod Control
+    - steering
+        - straifing √ - Kinda broke this a little
+        - Turning
+    - speed
+    - Stop/Start
+    - Tilt/Look
+    - Static animations
+
+How to Upload to Git:
+    - git status (Not necessary)
+    - git add .
+    - git commit
+    - git push
