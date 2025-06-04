@@ -1,38 +1,11 @@
-/***************************************************
-  This is an example for our Adafruit 16-channel PWM & Servo driver
-  Servo test - this will drive 8 servos, one after the other on the
-  first 8 pins of the PCA9685
-
-  Pick one up today in the adafruit shop!
-  ------> http://www.adafruit.com/products/815
-
-  These drivers use I2C to communicate, 2 pins are required to
-  interface.
-
-  Adafruit invests time and resources providing this open source code,
-  please support Adafruit and open-source hardware by purchasing
-  products from Adafruit!
-
-  Written by Limor Fried/Ladyada for Adafruit Industries.
-  BSD license, all text above must be included in any redistribution
- ****************************************************/
-
 #include <Adafruit_PWMServoDriver.h>
 #include <Arduino.h>
 #include <Wire.h>
+#include <legUtilities.h>
+#include <runtimeVariables.h>
+#include <utilities.h>
 
-
-// called this way, it uses the default address 0x40
-Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
-// you can also call it with a different address you want
-// Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x41);
-// you can also call it with a different address and I2C interface
-// Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40, Wire);
-
-// Depending on your servo make, the pulse width min and max may vary, you
-// want these to be as small/large as possible without hitting the hard stop
-// for max range. You'll have to tweak them as necessary to match the servos you
-// have!
+Adafruit_PWMServoDriver pcaDriver = Adafruit_PWMServoDriver();
 #define SERVOMIN 150 // This is the 'minimum' pulse length count (out of 4096)
 #define SERVOMAX 600 // This is the 'maximum' pulse length count (out of 4096)
 #define USMIN                                                                  \
@@ -43,14 +16,19 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
        // pulse of 600
 #define SERVO_FREQ 50 // Analog servos run at ~50 Hz updates
 
-// our servo # counter
-uint8_t servonum = 0;
+/*** TEMPERARY VARIABLE DECLARATION ***/
+float coxaLen = 0.0;   // Length of the coxa segment
+float femurLen = 0.0;  // Length of the femur segment
+float tibiaLen = 0.0;  // Length of the tibia segment
+Vector3 legOrigins[6]; // Base position of the leg in 3D space
+ServoData legs[6][3];  // Placeholder for Servo Data
+String servoNames[3] = {"Coxa", "Femur", "Tibia"}; // Names for each servo
+/**************************************/
 
 void setup() {
   Serial.begin(9600);
   Serial.println("Single Leg Test");
 
-  pwm.begin();
   /*
    * In theory the internal oscillator (clock) is 25MHz but it really isn't
    * that precise. You can 'calibrate' this by tweaking this number until
@@ -68,60 +46,119 @@ void setup() {
    * Failure to correctly set the int.osc value will cause unexpected PWM
    * results
    */
-  pwm.setOscillatorFrequency(27000000);
-  pwm.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
 
+  pcaDriver.begin();
+  pcaDriver.setOscillatorFrequency(26000000);
+  pcaDriver.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
+
+  for (int i = 0; i < 6; i++) {
+    for (int j = 0; j < 3; j++) {
+      legs[i][j] =
+          ServoData(0, "|> Leg " + String(i) + " | " + servoNames[j] + " <|",
+                    0.0, SERVOMIN, SERVOMAX / 2);
+    }
+  }
   delay(10);
 }
 
-// You can use this function if you'd like to set the pulse length in seconds
-// e.g. setServoPulse(0, 0.001) is a ~1 millisecond pulse width. It's not
-// precise!
-void setServoPulse(uint8_t n, double pulse) {
-  double pulselength;
-
-  pulselength = 1000000;     // 1,000,000 us per second
-  pulselength /= SERVO_FREQ; // Analog servos run at ~60 Hz updates
-  Serial.print(pulselength);
-  Serial.println(" us per period");
-  pulselength /= 4096; // 12 bits of resolution
-  Serial.print(pulselength);
-  Serial.println(" us per bit");
-  pulse *= 1000000; // convert input seconds to us
-  pulse /= pulselength;
-  Serial.println(pulse);
-  pwm.setPWM(n, 0, pulse);
-}
-
 void loop() {
-  // Drive each servo one at a time using setPWM()
-  Serial.println(servonum);
-  for (uint16_t pulselen = SERVOMIN; pulselen < SERVOMAX; pulselen++) {
-    pwm.setPWM(servonum, 0, pulselen);
-  }
+  int servoNum = 0;
+  int pulseLen = (SERVOMAX / SERVOMIN) / 2; // Start at mid-range
+  pcaDriver.setPWM(servoNum, 0, pulseLen);
 
   delay(500);
   for (uint16_t pulselen = SERVOMAX; pulselen > SERVOMIN; pulselen--) {
-    pwm.setPWM(servonum, 0, pulselen);
+    pcaDriver.setPWM(servoNum, 0, pulselen);
   }
-
-  delay(500);
-
-  // Drive each servo one at a time using writeMicroseconds(), it's not precise
-  // due to calculation rounding! The writeMicroseconds() function is used to
-  // mimic the Arduino Servo library writeMicroseconds() behavior.
-  for (uint16_t microsec = USMIN; microsec < USMAX; microsec++) {
-    pwm.writeMicroseconds(servonum, microsec);
-  }
-
-  delay(500);
-  for (uint16_t microsec = USMAX; microsec > USMIN; microsec--) {
-    pwm.writeMicroseconds(servonum, microsec);
-  }
-
-  delay(500);
-
-  servonum++;
-  if (servonum > 7)
-    servonum = 0; // Testing the first 8 servo channels
 }
+
+void calcServoAngles(Vector3 goal) {
+  // This function calculates the angles for the servos based on the desired
+  // position (goal).
+  shiftGoal(legs, goal);
+
+  float xDist = goal.x - legOrigin.x;
+  float yDist = goal.y - legOrigin.y;
+  float zDist = goal.z - legOrigin.z;
+
+  float hypotenuse = sqrt(xDist * xDist + yDist * yDist + zDist * zDist);
+
+  float theta = atan2(yDist, xDist);
+
+  const Vector3 effectiveGoal(goal.x - coxaLen * cos(theta),
+                              goal.y - coxaLen * sin(theta), goal.z);
+
+  const float hipToGoalDistance = effectiveGoal.distanceTo(legOrigin);
+}
+
+/*
+export function calcAngles(goals, legParts, coxaLen, femurLen, tibiaLen) {
+        const jointAngles = goals.map((goal, i) => {
+                const pivotPosition = legParts[i][0].getWorldPosition(new
+THREE.Vector3()); const hipPosition = legParts[i][1].getWorldPosition(new
+THREE.Vector3());
+
+                // Calculate the distance from the pivot to the goal
+                const xDistance = goal.x - pivotPosition.x;
+                const zDistance = goal.z - pivotPosition.z;
+                const rise = pivotPosition.y - goal.y;
+                const pivotToGoal = Math.sqrt(xDistance ** 2 + zDistance ** 2 +
+rise ** 2);
+
+                // Calculate the angle of the coxa rotation
+                const theta = Math.atan2(zDistance, xDistance);
+
+                // Calculate the effective distance from the hip to the goal
+                const effectiveGoalX = goal.x - coxaLen * Math.cos(theta);
+                const effectiveGoalZ = goal.z - coxaLen * Math.sin(theta);
+                const effectiveGoal = new THREE.Vector3(
+                        effectiveGoalX,
+                        goal.y,
+                        effectiveGoalZ
+                );
+                const hipToGoalDistance = effectiveGoal.distanceTo(hipPosition);
+
+                // Adjust goal if out of bounds
+                if (hipToGoalDistance > femurLen + tibiaLen) {
+                        effectiveGoal.lerp(
+                                hipPosition,
+                                1 - (femurLen + tibiaLen - 0.001) /
+hipToGoalDistance
+                        );
+                }
+
+                // Calculate distances and angles
+                const adjustedXDistance = effectiveGoal.x - hipPosition.x;
+                const adjustedZDistance = effectiveGoal.z - hipPosition.z;
+                const adjustedRise = hipPosition.y - effectiveGoal.y;
+                const h = Math.sqrt(adjustedXDistance ** 2 + adjustedZDistance
+** 2); const hipToGoal = Math.sqrt(h ** 2 + adjustedRise ** 2);
+
+                const joint1 = Math.atan2(adjustedZDistance, adjustedXDistance);
+// Pivot joint angle const angleA = Math.atan(adjustedRise / h); const angleB =
+Math.acos( (hipToGoal ** 2 + femurLen ** 2 - tibiaLen ** 2) / (2 * hipToGoal *
+femurLen)
+                );
+                const joint2 = angleB - angleA; // Hip joint angle
+                const joint3 = Math.acos(
+                        (femurLen ** 2 + tibiaLen ** 2 - hipToGoal ** 2) /
+                                (2 * femurLen * tibiaLen)
+                ); // Knee joint angle
+
+                return [joint1, joint2, joint3];
+        });
+
+        return jointAngles;
+}
+*/
+
+// void setServoPositions(int leg, Vector3 angles) {
+//   // This function sets the servo positions based on the calculated angles.
+//   // The angles are in degrees and should be converted to the appropriate
+//   // pulse width for the servos.
+
+//   // Example of setting servo positions:
+//   // pcaDriver.setPWM(leg * 3 + 0, 0, angleToPulseWidth(angles.x));
+//   // pcaDriver.setPWM(leg * 3 + 1, 0, angleToPulseWidth(angles.y));
+//   // pcaDriver.setPWM(leg * 3 + 2, 0, angleToPulseWidth(angles.z));
+// }

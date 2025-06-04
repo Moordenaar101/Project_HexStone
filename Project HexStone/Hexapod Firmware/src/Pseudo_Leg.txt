@@ -1,0 +1,74 @@
+// LegManager.cpp pseudocode
+
+#include "LegManager.h"
+#include "NRF.h"
+#include <EEPROM.h>
+
+// Initialize arrays for current leg positions and servo objects
+// Initialize calibration offsets array
+
+Vector3 posToAngle(Vector3 pos)
+{
+    // If position is out of reach:
+    //     Print error and return zero angles
+
+    // Calculate x, y, z from position
+    // Compute base angle (theta1)
+    // Compute projected leg length (l, l1)
+    // Compute distance from base to foot (h)
+    // Compute femur and tibia angles (phi1, phi2, phi3)
+    // Convert angles to degrees and apply offsets
+    // Return angles as Vector3
+}
+
+void setLegAngles(int leg, Vector3 angles)
+{
+    // Write angles (with calibration offsets) to coxa, femur, and tibia servos
+}
+
+void moveToPos(int leg, Vector3 pos)
+{
+    // Update sensor data and current leg position
+    // Convert position to angles
+    // Set leg angles
+}
+
+void attachServos()
+{
+    // For each leg:
+    //     Attach coxa, femur, and tibia servos to their pins
+}
+
+void saveCalibrationOffsets()
+{
+    // For each offset:
+    //     Save to EEPROM
+    // Print confirmation
+}
+
+void loadCalibrationOffsets()
+{
+    // For each offset:
+    //     Load from EEPROM
+    // Print confirmation
+}
+
+Vector3 convertLocalLegPointToGlobal(Vector3 localLegPoint, int legIndex)
+{
+    // Determine distance from center to leg base
+    // Get angle for leg
+    // Calculate base position (x, y)
+    // Rotate local point to global frame
+    // Add base position to rotated offset
+    // Return global position as Vector3
+}
+
+Vector3 convertGlobalLegPointToLocal(Vector3 globalPoint, int legIndex)
+{
+    // Determine distance from center to leg base
+    // Get angle for leg
+    // Calculate base position (x, y)
+    // Subtract base from global point to get relative vector
+    // Project relative vector onto local axes
+    // Return local position as Vector3
+}
