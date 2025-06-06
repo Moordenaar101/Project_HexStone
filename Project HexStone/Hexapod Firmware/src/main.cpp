@@ -1,6 +1,7 @@
 #include <Adafruit_PWMServoDriver.h>
 #include <Arduino.h>
 #include <Wire.h>
+#include <math.h>
 
 Adafruit_PWMServoDriver pcaDriver = Adafruit_PWMServoDriver();
 #define SERVOMIN 75 // This is the 'minimum' pulse length count (out of 4096)
@@ -13,7 +14,7 @@ Adafruit_PWMServoDriver pcaDriver = Adafruit_PWMServoDriver();
        // pulse of 600
 #define SERVO_FREQ 50 // Analog servos run at ~50 Hz updates
 
-#include <math.h>
+#define NUM_LEGS 1 // The number of legs to be initiated
 
 struct Vector2 {
   float x;
@@ -32,6 +33,13 @@ struct Vector2 {
   Vector2 lerp(const Vector2 &other, float t) const {
     return Vector2(x + (other.x - x) * t, y + (other.y - y) * t);
   }
+
+  // Assignment from Vector3: assigns x, y, ignores z
+  Vector2 &operator=(const Vector3 &v3) {
+    x = v3.x;
+    y = v3.y;
+    return *this;
+  }
 };
 
 struct Vector3 {
@@ -41,6 +49,14 @@ struct Vector3 {
 
   Vector3() : x(0), y(0), z(0) {}
   Vector3(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
+
+  // Assignment from Vector2: assigns x, y, sets z to 0
+  Vector3 &operator=(const Vector2 &v2) {
+    x = v2.x;
+    y = v2.y;
+    z = 0;
+    return *this;
+  }
 
   float distanceTo(const Vector3 &other) const {
     float dx = x - other.x;
@@ -62,173 +78,144 @@ struct Vector3 {
   }
 };
 
-struct ServoData {
-  int servoNum;
-  String servoName;   // <-- Added variable for servo name
-  float currentAngle; // in degrees
-  uint16_t pulseStart;
-  uint16_t pulseEnd;
+struct Legtype {
+  float coxaAngle;
+  float femurAngle;
+  float tibiaAngle;
+  Vector2 gaitOrigin;
+  Vector2 legOrigin;
+  Vector3 footPosition; // Current position of the foot in 3D space
+  bool isGrounded;      // Whether the foot is currently on the ground
 
-  // Default constructor
-  ServoData()
-      : servoNum(0), servoName(""), currentAngle(0.0f), pulseStart(0),
-        pulseEnd(0) {}
+  Legtype()
+      : coxaAngle(90), femurAngle(90), tibiaAngle(90), gaitOrigin(),
+        legOrigin(), footPosition(), isGrounded(true) {}
 
-  // Constructor with name
-  ServoData(int num, String &name, float angle, uint16_t start, uint16_t end)
-      : servoNum(num), servoName(name), currentAngle(angle), pulseStart(start),
-        pulseEnd(end) {}
-
-  // Calculate angle based on current pulse value
-  float angleFromPulse(uint16_t pulse) const {
-    // Linear mapping from pulse range to angle range
-    return (pulse - pulseStart) / float(pulseEnd - pulseStart);
+  // Assignment operator
+  Legtype &operator=(const Legtype &other) {
+    if (this != &other) {
+      coxaAngle = other.coxaAngle;
+      femurAngle = other.femurAngle;
+      tibiaAngle = other.tibiaAngle;
+      gaitOrigin = other.gaitOrigin;
+      footPosition = other.footPosition;
+      isGrounded = other.isGrounded;
+    }
+    return *this;
   }
 };
 
 /*** TEMPERARY VARIABLE DECLARATION ***/
-float coxaLen = 0.0;   // Length of the coxa segment
-float femurLen = 0.0;  // Length of the femur segment
-float tibiaLen = 0.0;  // Length of the tibia segment
-Vector3 legOrigins[6]; // Base position of the leg in 3D space
-ServoData legs[6][3];  // Placeholder for Servo Data
+int coxaLen = 45;       // Length of the coxa segment
+int femurLen = 100;     // Length of the femur segment
+int tibiaLen = 180;     // Length of the tibia segment
+int bodyHeight = 50;    // Height of the chassis, used for gait calculations
+Legtype legs[NUM_LEGS]; // Placeholder for Servo Data
 String servoNames[3] = {"Coxa", "Femur", "Tibia"}; // Names for each servo
+const Vector2 legOrigins[6] = {
+    Vector2(-70, 85), Vector2(-70, 0), Vector2(-70, -85),
+    Vector2(70, -85), Vector2(70, 0),  Vector2(70, 85)}; // Leg origins
+const Vector2 gaitOrigins[6] = {
+    Vector2(-150, 200), Vector2(-170, 0), Vector2(-150, -200),
+    Vector2(150, -200), Vector2(170, 0),  Vector2(150, 200)}; // Gait origins
 /**************************************/
 
-// void driveServos(legtype leg, float goalAngles)
-
-//     void setup1() {
-//   Serial.begin(9600);
-//   Serial.println("Single Leg Test");
-
-//   /*
-//    * In theory the internal oscillator (clock) is 25MHz but it really isn't
-//    * that precise. You can 'calibrate' this by tweaking this number until
-//    * you get the PWM update frequency you're expecting!
-//    * The int.osc. for the PCA9685 chip is a range between about 23-27MHz and
-//    * is used for calculating things like writeMicroseconds()
-//    * Analog servos run at ~50 Hz updates, It is importaint to use an
-//    * oscilloscope in setting the int.osc frequency for the I2C PCA9685 chip.
-//    * 1) Attach the oscilloscope to one of the PWM signal pins and ground on
-//    *    the I2C PCA9685 chip you are setting the value for.
-//    * 2) Adjust setOscillatorFrequency() until the PWM update frequency is the
-//    *    expected value (50Hz for most ESCs)
-//    * Setting the value here is specific to each individual I2C PCA9685 chip
-//    and
-//    * affects the calculations for the PWM update frequency.
-//    * Failure to correctly set the int.osc value will cause unexpected PWM
-//    * results
-//    */
-
-//   pcaDriver.begin();
-//   pcaDriver.setOscillatorFrequency(26000000);
-//   pcaDriver.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
-
-//   for (int i = 0; i < 6; i++) {
-//     for (int j = 0; j < 3; j++) {
-//       legs[i][j] =
-//           ServoData(0, "|> Leg " + String(i) + " | " + servoNames[j] + " <|",
-//                     0.0, SERVOMIN, SERVOMAX / 2);
-//     }
-//   }
-//   delay(10);
-// }
-
-void loop1() {
-  int servoNum = 0;
-  int pulseLen = (SERVOMAX / SERVOMIN) / 2; // Start at mid-range
-  pcaDriver.setPWM(servoNum, 0, pulseLen);
-
-  delay(500);
-  for (uint16_t pulselen = SERVOMAX; pulselen > SERVOMIN; pulselen--) {
-    pcaDriver.setPWM(servoNum, 0, pulselen);
-  }
-}
-
-// void calcServoAngles(Vector3 goal) {
-//   // This function calculates the angles for the servos based on the desired
-//   // position (goal).
-//   shiftGoal(legs, goal);
-
-//   float xDist = goal.x - legOrigin.x;
-//   float yDist = goal.y - legOrigin.y;
-//   float zDist = goal.z - legOrigin.z;
-
-//   float hypotenuse = sqrt(xDist * xDist + yDist * yDist + zDist * zDist);
-
-//   float theta = atan2(yDist, xDist);
-
-//   const Vector3 effectiveGoal(goal.x - coxaLen * cos(theta),
-//                               goal.y - coxaLen * sin(theta), goal.z);
-
-//   const float hipToGoalDistance = effectiveGoal.distanceTo(legOrigin);
-// }
-
+// Hexapod Layout
 /*
-export function calcAngles(goals, legParts, coxaLen, femurLen, tibiaLen) {
-        const jointAngles = goals.map((goal, i) => {
-                const pivotPosition = legParts[i][0].getWorldPosition(new
-THREE.Vector3()); const hipPosition = legParts[i][1].getWorldPosition(new
-THREE.Vector3());
+          Y
+          ↑
+          + → X
 
-                // Calculate the distance from the pivot to the goal
-                const xDistance = goal.x - pivotPosition.x;
-                const zDistance = goal.z - pivotPosition.z;
-                const rise = pivotPosition.y - goal.y;
-                const pivotToGoal = Math.sqrt(xDistance ** 2 + zDistance ** 2 +
-rise ** 2);
+        Front
+   (0)         (5)
+     \  __↑__  /
+      \/     \/
+(1)___|       |___(4)
+      |       |
+      /\_____/\
+     /         \
+   (2)         (3)
+        Back
 
-                // Calculate the angle of the coxa rotation
-                const theta = Math.atan2(zDistance, xDistance);
+ Parts:
+ 0 = Coxa
+ 1 = Femur
+ 2 = Tibia
 
-                // Calculate the effective distance from the hip to the goal
-                const effectiveGoalX = goal.x - coxaLen * Math.cos(theta);
-                const effectiveGoalZ = goal.z - coxaLen * Math.sin(theta);
-                const effectiveGoal = new THREE.Vector3(
-                        effectiveGoalX,
-                        goal.y,
-                        effectiveGoalZ
-                );
-                const hipToGoalDistance = effectiveGoal.distanceTo(hipPosition);
-
-                // Adjust goal if out of bounds
-                if (hipToGoalDistance > femurLen + tibiaLen) {
-                        effectiveGoal.lerp(
-                                hipPosition,
-                                1 - (femurLen + tibiaLen - 0.001) /
-hipToGoalDistance
-                        );
-                }
-
-                // Calculate distances and angles
-                const adjustedXDistance = effectiveGoal.x - hipPosition.x;
-                const adjustedZDistance = effectiveGoal.z - hipPosition.z;
-                const adjustedRise = hipPosition.y - effectiveGoal.y;
-                const h = Math.sqrt(adjustedXDistance ** 2 + adjustedZDistance
-** 2); const hipToGoal = Math.sqrt(h ** 2 + adjustedRise ** 2);
-
-                const joint1 = Math.atan2(adjustedZDistance, adjustedXDistance);
-// Pivot joint angle const angleA = Math.atan(adjustedRise / h); const angleB =
-Math.acos( (hipToGoal ** 2 + femurLen ** 2 - tibiaLen ** 2) / (2 * hipToGoal *
-femurLen)
-                );
-                const joint2 = angleB - angleA; // Hip joint angle
-                const joint3 = Math.acos(
-                        (femurLen ** 2 + tibiaLen ** 2 - hipToGoal ** 2) /
-                                (2 * femurLen * tibiaLen)
-                ); // Knee joint angle
-
-                return [joint1, joint2, joint3];
-        });
-
-        return jointAngles;
-}
+          2
+        // \\
+ |0 == 1    \\
+             \\
 */
+
+void driveServos(Legtype leg, float goalAngles) {}
+
+void setup1() {
+  Serial.begin(9600);
+  Serial.println("Single Leg Test");
+  pcaDriver.begin();
+  pcaDriver.setOscillatorFrequency(26000000);
+  pcaDriver.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
+
+  for (int i = 0; i < NUM_LEGS; i++) { // Construct the leg objects
+    legs[i].gaitOrigin = gaitOrigins[i];
+    legs[i].legOrigin = legOrigins[i];
+    legs[i].footPosition = gaitOrigins[i];
+  }
+
+  delay(10);
+}
+
+void loop1() {}
+
+Vector3 inverseKinematics(Legtype leg, const Vector3 &goal) {
+
+  const float xDistance = goal.x - leg.legOrigin.x;
+  const float yDistance = goal.y - leg.legOrigin.y;
+  const float rise = bodyHeight - goal.z;
+
+  const float pivotToGoal =
+      sqrt(xDistance * xDistance + yDistance * yDistance + rise * rise);
+
+  const float theta = atan2(yDistance, xDistance);
+
+  Vector3 effectiveGoal(goal.x - coxaLen * cos(theta),
+                        goal.y - coxaLen * sin(theta), goal.z);
+
+  // Calculate the position of the femur servo in 3d space
+  // This will make checking if the goal is within reach easier
+  const Vector3 femurServoPosition(
+      leg.legOrigin.x + coxaLen * cos(leg.coxaAngle * M_PI / 180.0f),
+      leg.legOrigin.y + coxaLen * sin(leg.coxaAngle * M_PI / 180.0f),
+      bodyHeight);
+
+  // Calculate the distance from the femur servo to the effective goal
+  const float hipToGoalDistance = effectiveGoal.distanceTo(femurServoPosition);
+
+  // Adjust goal if out of bounds
+  if (hipToGoalDistance > femurLen + tibiaLen)
+    effectiveGoal.lerp(femurServoPosition,
+                       1 - (femurLen + tibiaLen - 0.001f) / hipToGoalDistance);
+
+  //  accounting for the distance between the coxa and femur servos
+  const Vector3 adjustedDistVect(effectiveGoal.x - femurServoPosition.x,
+                                 effectiveGoal.y - femurServoPosition.y,
+                                 femurServoPosition.z - effectiveGoal.z);
+
+  const float h = sqrt(square(adjustedDistVect.x) + square(adjustedDistVect.y));
+  const float hipToGoal = sqrt(square(h) + square(adjustedDistVect.z));
+
+  return Vector3(
+      atan2(adjustedDistVect.y, adjustedDistVect.x),
+      acos((square(hipToGoal) + square(femurLen) - square(tibiaLen)) /
+           (2 * hipToGoal * femurLen)) -
+          atan(adjustedDistVect.z / h),
+      acos((square(femurLen) + square(tibiaLen) - square(hipToGoal)) /
+           (2 * femurLen * tibiaLen)));
+}
 
 // void setServoPositions(int leg, Vector3 angles) {
 //   // This function sets the servo positions based on the calculated angles.
-//   // The angles are in degrees and should be converted to the appropriate
-//   // pulse width for the servos.
 
 //   // Example of setting servo positions:
 //   // pcaDriver.setPWM(leg * 3 + 0, 0, angleToPulseWidth(angles.x));
