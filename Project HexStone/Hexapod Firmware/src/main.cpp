@@ -1,65 +1,10 @@
-<<<<<<< HEAD
-// /***************************************************
-//   This is an example for our Adafruit 16-channel PWM & Servo driver
-//   Servo test - this will drive 8 servos, one after the other on the
-//   first 8 pins of the PCA9685
-
-//   Pick one up today in the adafruit shop!
-//   ------> http://www.adafruit.com/products/815
-
-//   These drivers use I2C to communicate, 2 pins are required to
-//   interface.
-
-//   Adafruit invests time and resources providing this open source code,
-//   please support Adafruit and open-source hardware by purchasing
-//   products from Adafruit!
-
-//   Written by Limor Fried/Ladyada for Adafruit Industries.
-//   BSD license, all text above must be included in any redistribution
-//  ****************************************************/
-
-// #include <Adafruit_PWMServoDriver.h>
-// #include <Arduino.h>
-// #include <Wire.h>
-
-// // called this way, it uses the default address 0x40
-// Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
-// // you can also call it with a different address you want
-// // Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x41);
-// // you can also call it with a different address and I2C interface
-// // Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40, Wire);
-
-// // Depending on your servo make, the pulse width min and max may vary, you
-// // want these to be as small/large as possible without hitting the hard stop
-// // for max range. You'll have to tweak them as necessary to match the servos you
-// // have!
-// #define SERVOMIN 150 // This is the 'minimum' pulse length count (out of 4096)
-// #define SERVOMAX 600 // This is the 'maximum' pulse length count (out of 4096)
-// #define USMIN                                                                  \
-//   600 // This is the rounded 'minimum' microsecond length based on the minimum
-//       // pulse of 150
-// #define USMAX                                                                  \
-//   2400 // This is the rounded 'maximum' microsecond length based on the maximum
-//        // pulse of 600
-// #define SERVO_FREQ 50 // Analog servos run at ~50 Hz updates
-
-// // our servo # counter
-// uint8_t servonum = 0;
-
-// void setup1() {
-//   Serial.begin(9600);
-//   Serial.println("Single Leg Test");
-=======
 #include <Adafruit_PWMServoDriver.h>
 #include <Arduino.h>
 #include <Wire.h>
-#include <legUtilities.h>
-#include <runtimeVariables.h>
-#include <utilities.h>
 
 Adafruit_PWMServoDriver pcaDriver = Adafruit_PWMServoDriver();
-#define SERVOMIN 150 // This is the 'minimum' pulse length count (out of 4096)
-#define SERVOMAX 600 // This is the 'maximum' pulse length count (out of 4096)
+#define SERVOMIN 75 // This is the 'minimum' pulse length count (out of 4096)
+#define SERVOMAX 525 // This is the 'maximum' pulse length count (out of 4096)
 #define USMIN                                                                  \
   600 // This is the rounded 'minimum' microsecond length based on the minimum
       // pulse of 150
@@ -67,6 +12,79 @@ Adafruit_PWMServoDriver pcaDriver = Adafruit_PWMServoDriver();
   2400 // This is the rounded 'maximum' microsecond length based on the maximum
        // pulse of 600
 #define SERVO_FREQ 50 // Analog servos run at ~50 Hz updates
+
+#include <math.h>
+
+struct Vector2 {
+  float x;
+  float y;
+
+  Vector2() : x(0), y(0) {}
+  Vector2(float x_, float y_) : x(x_), y(y_) {}
+
+  float distanceTo(const Vector2 &other) const {
+    float dx = x - other.x;
+    float dy = y - other.y;
+    return sqrt(dx * dx + dy * dy);
+  }
+
+  // Linear interpolation between this and another Vector2
+  Vector2 lerp(const Vector2 &other, float t) const {
+    return Vector2(x + (other.x - x) * t, y + (other.y - y) * t);
+  }
+};
+
+struct Vector3 {
+  float x;
+  float y;
+  float z;
+
+  Vector3() : x(0), y(0), z(0) {}
+  Vector3(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
+
+  float distanceTo(const Vector3 &other) const {
+    float dx = x - other.x;
+    float dy = y - other.y;
+    float dz = z - other.z;
+    return sqrt(dx * dx + dy * dy + dz * dz);
+  }
+
+  Vector3 operator-(const Vector3 &other) const {
+    return Vector3(x - other.x, y - other.y, z - other.z);
+  }
+
+  float magnitude() const { return sqrt(x * x + y * y + z * z); }
+
+  // Linear interpolation between this and another Vector3
+  Vector3 lerp(const Vector3 &other, float t) const {
+    return Vector3(x + (other.x - x) * t, y + (other.y - y) * t,
+                   z + (other.z - z) * t);
+  }
+};
+
+struct ServoData {
+  int servoNum;
+  String servoName;   // <-- Added variable for servo name
+  float currentAngle; // in degrees
+  uint16_t pulseStart;
+  uint16_t pulseEnd;
+
+  // Default constructor
+  ServoData()
+      : servoNum(0), servoName(""), currentAngle(0.0f), pulseStart(0),
+        pulseEnd(0) {}
+
+  // Constructor with name
+  ServoData(int num, String &name, float angle, uint16_t start, uint16_t end)
+      : servoNum(num), servoName(name), currentAngle(angle), pulseStart(start),
+        pulseEnd(end) {}
+
+  // Calculate angle based on current pulse value
+  float angleFromPulse(uint16_t pulse) const {
+    // Linear mapping from pulse range to angle range
+    return (pulse - pulseStart) / float(pulseEnd - pulseStart);
+  }
+};
 
 /*** TEMPERARY VARIABLE DECLARATION ***/
 float coxaLen = 0.0;   // Length of the coxa segment
@@ -76,9 +94,13 @@ Vector3 legOrigins[6]; // Base position of the leg in 3D space
 ServoData legs[6][3];  // Placeholder for Servo Data
 String servoNames[3] = {"Coxa", "Femur", "Tibia"}; // Names for each servo
 /**************************************/
->>>>>>> 3dd82500af267ca571df0163241e231d28e394f9
 
-//   pwm.begin();
+// void driveServos(legtype leg, float goalAngles)
+
+//     void setup1() {
+//   Serial.begin(9600);
+//   Serial.println("Single Leg Test");
+
 //   /*
 //    * In theory the internal oscillator (clock) is 25MHz but it really isn't
 //    * that precise. You can 'calibrate' this by tweaking this number until
@@ -91,102 +113,28 @@ String servoNames[3] = {"Coxa", "Femur", "Tibia"}; // Names for each servo
 //    *    the I2C PCA9685 chip you are setting the value for.
 //    * 2) Adjust setOscillatorFrequency() until the PWM update frequency is the
 //    *    expected value (50Hz for most ESCs)
-//    * Setting the value here is specific to each individual I2C PCA9685 chip and
+//    * Setting the value here is specific to each individual I2C PCA9685 chip
+//    and
 //    * affects the calculations for the PWM update frequency.
 //    * Failure to correctly set the int.osc value will cause unexpected PWM
 //    * results
 //    */
-//   pwm.setOscillatorFrequency(27000000);
-//   pwm.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
 
-<<<<<<< HEAD
+//   pcaDriver.begin();
+//   pcaDriver.setOscillatorFrequency(26000000);
+//   pcaDriver.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
+
+//   for (int i = 0; i < 6; i++) {
+//     for (int j = 0; j < 3; j++) {
+//       legs[i][j] =
+//           ServoData(0, "|> Leg " + String(i) + " | " + servoNames[j] + " <|",
+//                     0.0, SERVOMIN, SERVOMAX / 2);
+//     }
+//   }
 //   delay(10);
 // }
 
-// // You can use this function if you'd like to set the pulse length in seconds
-// // e.g. setServoPulse(0, 0.001) is a ~1 millisecond pulse width. It's not
-// // precise!
-// void setServoPulse(uint8_t n, double pulse) {
-//   double pulselength;
-
-//   pulselength = 1000000;     // 1,000,000 us per second
-//   pulselength /= SERVO_FREQ; // Analog servos run at ~60 Hz updates
-//   Serial.print(pulselength);
-//   Serial.println(" us per period");
-//   pulselength /= 4096; // 12 bits of resolution
-//   Serial.print(pulselength);
-//   Serial.println(" us per bit");
-//   pulse *= 1000000; // convert input seconds to us
-//   pulse /= pulselength;
-//   Serial.println(pulse);
-//   pwm.setPWM(n, 0, pulse);
-// }
-
-// void loop1() {
-//   // Drive each servo one at a time using setPWM()
-//   Serial.println(servonum);
-//   for (uint16_t pulselen = SERVOMIN; pulselen < SERVOMAX; pulselen++) {
-//     pwm.setPWM(servonum, 0, pulselen);
-//   }
-
-//   delay(500);
-//   for (uint16_t pulselen = SERVOMAX; pulselen > SERVOMIN; pulselen--) {
-//     pwm.setPWM(servonum, 0, pulselen);
-//   }
-
-//   delay(500);
-
-//   // Drive each servo one at a time using writeMicroseconds(), it's not precise
-//   // due to calculation rounding! The writeMicroseconds() function is used to
-//   // mimic the Arduino Servo library writeMicroseconds() behavior.
-//   for (uint16_t microsec = USMIN; microsec < USMAX; microsec++) {
-//     pwm.writeMicroseconds(servonum, microsec);
-//   }
-
-//   delay(500);
-//   for (uint16_t microsec = USMAX; microsec > USMIN; microsec--) {
-//     pwm.writeMicroseconds(servonum, microsec);
-//   }
-
-//   delay(500);
-
-//   servonum++;
-//   if (servonum > 7)
-//     servonum = 0; // Testing the first 8 servo channels
-=======
-  /*
-   * In theory the internal oscillator (clock) is 25MHz but it really isn't
-   * that precise. You can 'calibrate' this by tweaking this number until
-   * you get the PWM update frequency you're expecting!
-   * The int.osc. for the PCA9685 chip is a range between about 23-27MHz and
-   * is used for calculating things like writeMicroseconds()
-   * Analog servos run at ~50 Hz updates, It is importaint to use an
-   * oscilloscope in setting the int.osc frequency for the I2C PCA9685 chip.
-   * 1) Attach the oscilloscope to one of the PWM signal pins and ground on
-   *    the I2C PCA9685 chip you are setting the value for.
-   * 2) Adjust setOscillatorFrequency() until the PWM update frequency is the
-   *    expected value (50Hz for most ESCs)
-   * Setting the value here is specific to each individual I2C PCA9685 chip and
-   * affects the calculations for the PWM update frequency.
-   * Failure to correctly set the int.osc value will cause unexpected PWM
-   * results
-   */
-
-  pcaDriver.begin();
-  pcaDriver.setOscillatorFrequency(26000000);
-  pcaDriver.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
-
-  for (int i = 0; i < 6; i++) {
-    for (int j = 0; j < 3; j++) {
-      legs[i][j] =
-          ServoData(0, "|> Leg " + String(i) + " | " + servoNames[j] + " <|",
-                    0.0, SERVOMIN, SERVOMAX / 2);
-    }
-  }
-  delay(10);
-}
-
-void loop() {
+void loop1() {
   int servoNum = 0;
   int pulseLen = (SERVOMAX / SERVOMIN) / 2; // Start at mid-range
   pcaDriver.setPWM(servoNum, 0, pulseLen);
@@ -197,24 +145,24 @@ void loop() {
   }
 }
 
-void calcServoAngles(Vector3 goal) {
-  // This function calculates the angles for the servos based on the desired
-  // position (goal).
-  shiftGoal(legs, goal);
+// void calcServoAngles(Vector3 goal) {
+//   // This function calculates the angles for the servos based on the desired
+//   // position (goal).
+//   shiftGoal(legs, goal);
 
-  float xDist = goal.x - legOrigin.x;
-  float yDist = goal.y - legOrigin.y;
-  float zDist = goal.z - legOrigin.z;
+//   float xDist = goal.x - legOrigin.x;
+//   float yDist = goal.y - legOrigin.y;
+//   float zDist = goal.z - legOrigin.z;
 
-  float hypotenuse = sqrt(xDist * xDist + yDist * yDist + zDist * zDist);
+//   float hypotenuse = sqrt(xDist * xDist + yDist * yDist + zDist * zDist);
 
-  float theta = atan2(yDist, xDist);
+//   float theta = atan2(yDist, xDist);
 
-  const Vector3 effectiveGoal(goal.x - coxaLen * cos(theta),
-                              goal.y - coxaLen * sin(theta), goal.z);
+//   const Vector3 effectiveGoal(goal.x - coxaLen * cos(theta),
+//                               goal.y - coxaLen * sin(theta), goal.z);
 
-  const float hipToGoalDistance = effectiveGoal.distanceTo(legOrigin);
-}
+//   const float hipToGoalDistance = effectiveGoal.distanceTo(legOrigin);
+// }
 
 /*
 export function calcAngles(goals, legParts, coxaLen, femurLen, tibiaLen) {
@@ -286,5 +234,4 @@ femurLen)
 //   // pcaDriver.setPWM(leg * 3 + 0, 0, angleToPulseWidth(angles.x));
 //   // pcaDriver.setPWM(leg * 3 + 1, 0, angleToPulseWidth(angles.y));
 //   // pcaDriver.setPWM(leg * 3 + 2, 0, angleToPulseWidth(angles.z));
->>>>>>> 3dd82500af267ca571df0163241e231d28e394f9
 // }
