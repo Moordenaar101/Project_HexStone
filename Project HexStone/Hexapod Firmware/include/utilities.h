@@ -1,75 +1,98 @@
-#pragma once
+// #pragma once
 
-#include "Arduino.h"
-#include <math.h>
+// #include "Arduino.h"
+// #include <math.h>
 
-struct Vector2 {
-  float x;
-  float y;
+// struct Vector3; // Forward declaration
 
-  Vector2() : x(0), y(0) {}
-  Vector2(float x_, float y_) : x(x_), y(y_) {}
+// struct Vector2 {
+//   float x;
+//   float y;
 
-  float distanceTo(const Vector2 &other) const {
-    float dx = x - other.x;
-    float dy = y - other.y;
-    return sqrt(dx * dx + dy * dy);
-  }
+//   Vector2() : x(0), y(0) {}
+//   Vector2(float x_, float y_) : x(x_), y(y_) {}
 
-  // Linear interpolation between this and another Vector2
-  Vector2 lerp(const Vector2 &other, float t) const {
-    return Vector2(x + (other.x - x) * t, y + (other.y - y) * t);
-  }
-};
+//   float distanceTo(const Vector2 &other) const {
+//     float dx = x - other.x;
+//     float dy = y - other.y;
+//     return sqrt(dx * dx + dy * dy);
+//   }
 
-struct Vector3 {
-  float x;
-  float y;
-  float z;
+//   // Linear interpolation between this and another Vector2
+//   Vector2 lerp(const Vector2 &other, float t) const {
+//     return Vector2(x + (other.x - x) * t, y + (other.y - y) * t);
+//   }
 
-  Vector3() : x(0), y(0), z(0) {}
-  Vector3(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
+//   Vector2 operator=(const Vector3 &v3) {
+//     x = v3.x;
+//     y = v3.y;
+//     return *this;
+//   }
+// };
 
-  float distanceTo(const Vector3 &other) const {
-    float dx = x - other.x;
-    float dy = y - other.y;
-    float dz = z - other.z;
-    return sqrt(dx * dx + dy * dy + dz * dz);
-  }
+// struct Vector3 {
+//   float x;
+//   float y;
+//   float z;
 
-  Vector3 operator-(const Vector3 &other) const {
-    return Vector3(x - other.x, y - other.y, z - other.z);
-  }
+//   Vector3() : x(0), y(0), z(0) {}
+//   Vector3(float x_, float y_, float z_) : x(x_), y(y_), z(z_) {}
 
-  float magnitude() const { return sqrt(x * x + y * y + z * z); }
+//   float distanceTo(const Vector3 &other) const {
+//     float dx = x - other.x;
+//     float dy = y - other.y;
+//     float dz = z - other.z;
+//     return sqrt(dx * dx + dy * dy + dz * dz);
+//   }
 
-  // Linear interpolation between this and another Vector3
-  Vector3 lerp(const Vector3 &other, float t) const {
-    return Vector3(x + (other.x - x) * t, y + (other.y - y) * t,
-                   z + (other.z - z) * t);
-  }
-};
+//   Vector3 operator-(const Vector3 &other) const {
+//     return Vector3(x - other.x, y - other.y, z - other.z);
+//   }
 
-struct ServoData {
-  int servoNum;
-  String servoName;
-  float currentAngle; // in degrees
-  uint16_t pulseStart;
-  uint16_t pulseEnd;
+//   float magnitude() const { return sqrt(x * x + y * y + z * z); }
 
-  // Default constructor
-  ServoData()
-      : servoNum(0), servoName(""), currentAngle(0.0f), pulseStart(0),
-        pulseEnd(0) {}
+//   // Linear interpolation between this and another Vector3
+//   Vector3 lerp(const Vector3 &other, float t) const {
+//     return Vector3(x + (other.x - x) * t, y + (other.y - y) * t,
+//                    z + (other.z - z) * t);
+//   }
 
-  // Constructor with name
-  ServoData(int num, String &name, float angle, uint16_t start, uint16_t end)
-      : servoNum(num), servoName(name), currentAngle(angle), pulseStart(start),
-        pulseEnd(end) {}
+//   Vector3 operator=(const Vector2 &v2) {
+//     x = v2.x;
+//     y = v2.y;
+//     z = 0;
+//     return *this;
+//   }
+// };
 
-  // Calculate angle based on current pulse value
-  float angleFromPulse(uint16_t pulse) const {
-    // Linear mapping from pulse range to angle range
-    return (pulse - pulseStart) / float(pulseEnd - pulseStart);
-  }
-};
+// // // After both structs, define the cross-assignment operators:
+// // inline Vector2 &Vector2::operator=(const Vector3 &v3) {
+// //   x = v3.x;
+// //   y = v3.y;
+// //   return *this;
+// // }
+
+// struct ServoData {
+//   int servoNum;
+//   String servoName;
+//   float currentAngle; // in degrees
+//   uint16_t pulseStart;
+//   uint16_t pulseEnd;
+
+//   // Default constructor
+//   ServoData()
+//       : servoNum(0), servoName(""), currentAngle(0.0f), pulseStart(0),
+//         pulseEnd(0) {}
+
+//   // Constructor with name
+//   ServoData(int num, String &name, float angle, uint16_t start, uint16_t end)
+//       : servoNum(num), servoName(name), currentAngle(angle),
+//       pulseStart(start),
+//         pulseEnd(end) {}
+
+//   // Calculate angle based on current pulse value
+//   float angleFromPulse(uint16_t pulse) const {
+//     // Linear mapping from pulse range to angle range
+//     return (pulse - pulseStart) / float(pulseEnd - pulseStart);
+//   }
+// };
