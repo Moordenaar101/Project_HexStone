@@ -45,4 +45,6 @@ struct Legtype { // Servo angles are from -90° → 90°
   Legtype &operator=(const Legtype &other);
 };
 
+float lerp(float a, float b, float t);
+
 double radToDeg(double radians);

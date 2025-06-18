@@ -1,9 +1,12 @@
+#include "Controller.h"
 #include "LegUtilities.h"
 #include "Utilities.h"
 #include <Adafruit_PWMServoDriver.h>
 #include <Arduino.h>
 #include <Wire.h>
 #include <math.h>
+
+Adafruit_PWMServoDriver pcaDriver = Adafruit_PWMServoDriver();
 
 /*** TEMPERARY VARIABLE DECLARATION ***/
 int coxaLen = 45.0f;    // Length of the coxa segment
@@ -55,13 +58,15 @@ Vector3 inverseKinematics(Legtype leg, const Vector3 &goal);
 void setServoPositions(Legtype leg, Vector3 angles);
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
+  while (!Serial) // Wait for serial port to initialize
+    ;
   Serial.println("Single Leg Test");
   // pcaDriver.begin();
   // pcaDriver.setOscillatorFrequency(26000000);
   // pcaDriver.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
-  pinMode(SERVOPIN_16, OUTPUT); // Set the pin modes for the servos
-  pinMode(SERVOPIN_17, OUTPUT);
+  // pinMode(SERVOPIN_16, OUTPUT);     // Set the pin modes for the servos
+  // pinMode(SERVOPIN_17, OUTPUT);
 
   for (int i = 0; i < NUM_LEGS; i++) { // Construct the leg objects
     legs[i].legNumber = i;
@@ -70,9 +75,20 @@ void setup() {
     legs[i].footPosition = gaitOrigins[i];
   }
 
+  PS4.attach(notify);
+  PS4.attachOnConnect(onConnect);
+  PS4.attachOnDisconnect(onDisConnect);
+  PS4.begin();
+  removePairedDevices(); // This helps to solve connection issues
+  Serial.print("This device's MAC address is: ");
+  printDeviceAddress();
+  Serial.println("");
+
   delay(10);
 
-  setServoPositions(legs[0], inverseKinematics(legs[0], Vector3(225, 45, 5)));
+  //   setServoPositions(legs[0], inverseKinematics(legs[0], Vector3(225, 45,
+  //   5)),
+  //                     pcaDriver);
 }
 
-void loop() {}
+void loop() { delay(10); }

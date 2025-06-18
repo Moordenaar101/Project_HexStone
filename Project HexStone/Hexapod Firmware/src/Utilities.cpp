@@ -74,4 +74,6 @@ Legtype &Legtype::operator=(const Legtype &other) {
   return *this;
 }
 
+float lerp(float a, float b, float t) { return a * (1.0 - t) + (b * t); }
+
 double radToDeg(double radians) { return radians * double(180.0f / M_PI); }
