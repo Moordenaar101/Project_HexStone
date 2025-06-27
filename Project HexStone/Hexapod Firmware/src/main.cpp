@@ -9,11 +9,11 @@
 Adafruit_PWMServoDriver pcaDriver = Adafruit_PWMServoDriver();
 
 /*** TEMPERARY VARIABLE DECLARATION ***/
-int coxaLen = 45.0f;    // Length of the coxa segment
-int femurLen = 100.0f;  // Length of the femur segment
-int tibiaLen = 180.0f;  // Length of the tibia segment
-int bodyHeight = 50.0f; // Height of the chassis, used for gait calculations
-Legtype legs[NUM_LEGS]; // Placeholder for Servo Data
+int coxaLen = 45.0f;     // Length of the coxa segment
+int femurLen = 100.0f;   // Length of the femur segment
+int tibiaLen = 180.0f;   // Length of the tibia segment
+float bodyHeight = 50.0; // Height of the chassis, used for gait calculations
+Legtype legs[NUM_LEGS];  // Placeholder for Servo Data
 String servoNames[3] = {"Coxa", "Femur", "Tibia"}; // Names for each servo
 // const Vector2 legOrigins[6] = { // For testing!
 //     Vector2(-70, 85), Vector2(-70, 0), Vector2(-70, -85),
@@ -21,9 +21,12 @@ String servoNames[3] = {"Coxa", "Femur", "Tibia"}; // Names for each servo
 // const Vector2 gaitOrigins[6] = {
 //     Vector2(-150, 200), Vector2(-170, 0), Vector2(-150, -200),
 //     Vector2(150, -200), Vector2(170, 0),  Vector2(150, 200)}; // Gait origins
-const Vector2 legOrigins[6] = {Vector2(0, 0)};
+const Vector2 legOrigins[6] = {
+    Vector2(0, 0), Vector2(0, 0), Vector2(0, 0),
+    Vector2(0, 0), Vector2(0, 0), Vector2(0, 0),
+};
 const Vector2 gaitOrigins[6] = {Vector2(150, 0)};
-bool debug = true; // Debug flag
+bool debug = false; // Debug flag
 /**************************************/
 
 // Hexapod Layout
@@ -55,18 +58,21 @@ bool debug = true; // Debug flag
 */
 
 Vector3 inverseKinematics(Legtype leg, const Vector3 &goal);
-void setServoPositions(Legtype leg, Vector3 angles);
 
 void setup() {
   Serial.begin(115200);
   while (!Serial) // Wait for serial port to initialize
     ;
   Serial.println("Single Leg Test");
-  // pcaDriver.begin();
-  // pcaDriver.setOscillatorFrequency(26000000);
-  // pcaDriver.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
-  // pinMode(SERVOPIN_16, OUTPUT);     // Set the pin modes for the servos
-  // pinMode(SERVOPIN_17, OUTPUT);
+  pcaDriver.begin();
+  pcaDriver.setOscillatorFrequency(26000000);
+  pcaDriver.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
+  pinMode(SERVOPIN_16, OUTPUT);     // Set the pin modes for the servos
+  pinMode(SERVOPIN_17, OUTPUT);
+
+  // --- Added for pin 4 toggle logic ---
+  pinMode(19, OUTPUT); // Set pin 4 as output with pulldown
+  // ------------------------------------
 
   for (int i = 0; i < NUM_LEGS; i++) { // Construct the leg objects
     legs[i].legNumber = i;
@@ -86,9 +92,39 @@ void setup() {
 
   delay(10);
 
-  //   setServoPositions(legs[0], inverseKinematics(legs[0], Vector3(225, 45,
-  //   5)),
-  //                     pcaDriver);
+  digitalWrite(19, HIGH);
 }
 
-void loop() { delay(10); }
+// --- Added for pin 19 toggle logic ---
+bool pin19State = true;
+int debounceTime = 5;
+// ------------------------------------
+
+void loop() {
+
+  // --- Potentiometer logic ---
+  // float mappedPot = map(potValue, 0, 1023, 0, 180); // 0 to ~6.283 (2*PI)
+  // Vector3 potVec(mappedPot, mappedPot, mappedPot);
+  // ---------------------------
+
+  // --- Added for pin 19 toggle logic ---
+  ControllerData ctrl = getJoystickData();
+  delay(1);
+  if (ctrl.buttonCross && debounceTime > 5) {
+    pin19State = !pin19State;
+    digitalWrite(19, pin19State ? HIGH : LOW);
+    debounceTime = 0;
+  } else if (!ctrl.buttonCross) {
+    debounceTime++;
+  }
+
+  // pcaDriver.setPWM(
+  //     0, 0, float(fastMap(ctrl.leftStick.x, -127, 127, SERVOMIN, SERVOMAX)));
+  // pcaDriver.setPWM(
+  //     1, 0, float(fastMap(ctrl.leftStick.y, -127, 127, SERVOMIN, SERVOMAX)));
+  // pcaDriver.setPWM(
+  //     2, 0, float(fastMap(ctrl.rightStick.y, -127, 127, SERVOMIN,
+  //     SERVOMAX)));
+  setServoPositions(legs[0], inverseKinematics(legs[0], Vector3()), pcaDriver);
+  // ------------------------------------
+}

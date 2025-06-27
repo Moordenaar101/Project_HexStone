@@ -18,15 +18,15 @@ int legStates[6];
 int cycleProgress[6];
 Vector3 cycleStartPoints[6];
 float tArray[6];
-Vector2 joy1TargetVect;
-float joy1TargetMagnitude;
-Vector2 joy2TargetVect;
-float joy2TargetMagnitude;
-
-Vector2 joy1CurrentVect;
-float joy1CurrentMagnitude;
-Vector2 joy2CurrentVect;
-float joy2CurrentMagnitude;
+float frameHeight = 45;
+const float globalRotationFactor = 0.1;
+const float globalStrideFactor = 0.1;
+const int centerDist =
+    100; // Distance from the center of the hexapod to the coxa of each leg
+const float strideMultiplier[6] = {-1, -1, -1, 1, 1, 1};
+const float rotationMultiplier[6] = {1, 0, -1, 1, 0, -1};
+const float legLandHeight = 25;
+const float legPlacementAngle = 55;
 
 Vector3 inverseKinematics(Legtype leg, const Vector3 &goal) {
   // Returns a vector3 of angles given a leg object and a goal vector
@@ -121,24 +121,26 @@ void setServoPositions(Legtype leg, Vector3 angles,
   }
 }
 
-void initWalkMode(const Gait &gait, Legtype leg) {
+void gaitMode::init(const Gait &gait, Legtype leg) {
   for (int i = 0; i < 6; i++) {
     legStates[i] = Reset; // Reset all leg states
     cycleProgress[i] = gait.offsets[i] * cycleResolution;
   }
-};
+}
 
-void standMode(void) {}
+void gaitMode::stand(const Gait &gait, Legtype leg) {}
 
-void walkMode(const Gait &gait, Legtype leg) {
-  joy1TargetVect = {(float)map(getJoystickData(0).x, -127, 127, -100, 100),
-                    (float)map(getJoystickData(0).y, -127, 127, -100, 100)};
+void gaitMode::loop(const Gait &gait, Legtype leg) {
+  joy1TargetVect = {
+      (float)map(getJoystickData().leftStick.x, -127, 127, -100, 100),
+      (float)map(getJoystickData().leftStick.y, -127, 127, -100, 100)};
 
   joy1TargetMagnitude =
       constrain(hypot(joy1TargetVect.x, joy1TargetVect.y), 0, 100);
 
-  joy2TargetVect = {(float)map(getJoystickData(1).x, -127, 127, -100, 100),
-                    (float)map(getJoystickData(1).y, -127, 127, -100, 100)};
+  joy2TargetVect = {
+      (float)map(getJoystickData().rightStick.x, -127, 127, -100, 100),
+      (float)map(getJoystickData().rightStick.y, -127, 127, -100, 100)};
 
   joy2TargetMagnitude =
       constrain(hypot(joy2TargetVect.x, joy2TargetVect.y), 0, 100);
@@ -151,15 +153,164 @@ void walkMode(const Gait &gait, Legtype leg) {
 
   for (int i = 0; i < 6; i++) {
     tArray[i] = (float)cycleProgress[i] / cycleResolution;
-  }
+  };
 
-  // Vector3 getGaitCycle(gait, leg){}
+  // Vector3 gaitCycle(gait, leg){}
 }
 
-Vector3 getGaitPoint(const Gait &gait, Legtype leg, float t) {
+void gaitMode::exit() {
+  // Add any cleanup logic if needed
+}
 
-  if (t < gait.cycleRatio) {
+Vector3 gaitMode::getGaitCycle(const Gait &gait, Legtype leg) {
+
+  float rotationAmount = joy2CurrentVect.x * globalRotationFactor;
+
+  Vector2 strafeStrideLength = joy1CurrentVect * gait.strideLengthFactor;
+  strafeStrideLength.y =
+      constrain(strafeStrideLength.y, -gait.maxStrideLength / 2,
+                gait.maxStrideLength / 2);
+  strafeStrideLength.x = constrain(strafeStrideLength.x, -gait.maxStrideLength,
+                                   gait.maxStrideLength);
+
+  float t = tArray[leg.legNumber];
+
+  if (t < gait.cycleRatio) { // Pushing phase
     if (legStates[leg.legNumber] != Propelling)
       cycleStartPoints[leg.legNumber] = leg.footPosition;
+    legStates[leg.legNumber] = Propelling;
+
+    //-----This cycle is a straight line that will cause the hexapod to
+    // strafe-----//
+
+    // Starting point of the line
+    vector<Vector3> strafeControlPoints = vector<Vector3>(2);
+    strafeControlPoints[0] = cycleStartPoints[leg.legNumber];
+
+    // Ending point of the line
+    strafeControlPoints[1] =
+        Vector3(strafeStrideLength.y * strideMultiplier[leg.legNumber], // X
+                -strafeStrideLength.x * strideMultiplier[leg.legNumber] +
+                    centerDist, // Y
+                frameHeight     // Z
+                )
+            .rotate(legPlacementAngle * rotationMultiplier[leg.legNumber],
+                    Vector2(0, centerDist));
+
+    Vector3 strafePoint = GetPointOnBezierCurve(
+        strafeControlPoints, fastMap(t, 0, gait.cycleRatio, 0, 1));
+    //-------------------------------------------------------------------------------//
+
+    // Starting point of the curve
+    vector<Vector3> rotateControlPoints = vector<Vector3>(3);
+    rotateControlPoints[0] = cycleStartPoints[leg.legNumber];
+
+    // Middle point of the curve
+    rotateControlPoints[1] = Vector3(0,          // X
+                                     centerDist, // Y
+                                     frameHeight // Z
+    );
+
+    // Ending point of the curve
+    rotateControlPoints[2] = Vector3(rotationAmount, // X
+                                     centerDist,     // Y
+                                     frameHeight     // Z
+    );
+
+    Vector3 rotatePoint = GetPointOnBezierCurve(
+        rotateControlPoints, fastMap(t, 0, gait.cycleRatio, 0, 1));
+    //-------------------------------------------------------------------------------//
+
+    // Return the weighted average of the two points
+    return (strafePoint * abs(joy1CurrentMagnitude) +
+            rotatePoint * abs(joy2CurrentVect.x)) /
+           (abs(joy1CurrentMagnitude) + abs(joy2CurrentVect.x));
+  }
+
+  // Lifting
+  else {
+    if (legStates[leg.legNumber] != Lifting)
+      cycleStartPoints[leg.legNumber] = leg.footPosition;
+    legStates[leg.legNumber] = Lifting;
+
+    //------This cycle will cause the hexapod leg to lift up and return to the
+    // beginning of the walk cycle in a straight line-----//
+
+    // Starting point of the curve
+    vector<Vector3> strafeControlPoints = vector<Vector3>(4);
+    strafeControlPoints[0] = cycleStartPoints[leg.legNumber];
+
+    // Control point directly above the starting point causing the leg to lift
+    // up quickly
+    strafeControlPoints[1] =
+        cycleStartPoints[leg.legNumber] +
+        Vector3(0, 0, gait.liftHeight * globalStrideFactor);
+
+    // Control point directly above the ending point preventing the leg from
+    // running into the ground
+    strafeControlPoints[2] =
+        Vector3(-strafeStrideLength.y * strideMultiplier[leg.legNumber], // X
+                strafeStrideLength.x * strideMultiplier[leg.legNumber] +
+                    centerDist,             // Y
+                frameHeight + legLandHeight // Z
+                )
+            .rotate(legPlacementAngle * rotationMultiplier[leg.legNumber],
+                    Vector2(0, centerDist));
+
+    // Ending point of the curve
+    strafeControlPoints[3] =
+        Vector3(-strafeStrideLength.y * strideMultiplier[leg.legNumber],
+                strafeStrideLength.x * strideMultiplier[leg.legNumber] +
+                    centerDist,
+                frameHeight)
+            .rotate(legPlacementAngle * rotationMultiplier[leg.legNumber],
+                    Vector2(0, centerDist));
+
+    Vector3 straightPoint = GetPointOnBezierCurve(
+        strafeControlPoints, fastMap(t, gait.cycleRatio, 1, 0, 1));
+    //-------------------------------------------------------------------------------//
+
+    //------This cycle will cause the hexapod leg to lift up and return to the
+    // beginning of the walk cycle in a curved line-----//
+
+    // Starting point of the curve
+    vector<Vector3> rotateControlPoints = vector<Vector3>(5);
+    rotateControlPoints[0] = cycleStartPoints[leg.legNumber];
+
+    // Control point directly above the starting point causing the leg to lift
+    // up quickly
+    rotateControlPoints[1] =
+        cycleStartPoints[leg.legNumber] +
+        Vector3(0, 0, gait.liftHeight * globalStrideFactor);
+
+    // Control point at the apex of the curve and offset away from the hexapods
+    // body, cause the leg to lift up and away.
+    rotateControlPoints[2] =
+        Vector3(0,                                                 // X
+                centerDist,                                        // Y
+                frameHeight + gait.liftHeight * globalStrideFactor // Z
+        );
+
+    // Control point directly above the ending point preventing the leg from
+    // running into the ground
+    rotateControlPoints[3] = Vector3(-joy1CurrentMagnitude,      // X
+                                     centerDist,                 // Y
+                                     frameHeight + legLandHeight // Z
+    );
+
+    // Ending point of the curve
+    rotateControlPoints[4] = Vector3(-joy1CurrentMagnitude, // X
+                                     centerDist,            // Y
+                                     frameHeight            // Z
+    );
+
+    Vector3 rotatePoint = GetPointOnBezierCurve(
+        rotateControlPoints, fastMap(t, gait.cycleRatio, 1, 0, 1));
+    //-------------------------------------------------------------------------------//
+
+    // Return the weighted average of the two points
+    return (straightPoint * abs(joy1CurrentMagnitude) +
+            rotatePoint * abs(joy2CurrentVect.x)) /
+           (abs(joy1CurrentMagnitude) + abs(joy2CurrentVect.x));
   }
 }

@@ -3,7 +3,7 @@
 #include "Utilities.h"
 #include <Adafruit_PWMServoDriver.h>
 
-#define NUM_LEGS 1 // The number of legs to be initiated
+#define NUM_LEGS 6 // The number of legs to be initiated
 
 // Servo PWM/Timing definitions
 #define SERVOMIN 75  // This is the 'minimum' pulse length count (out of 4096)
@@ -16,8 +16,8 @@
 
 // Because the PCA9685 only has 16 channels (Servo# 0-15), These pins are the
 // remaining 2 servos that will be directly connected to the µC
-#define SERVOPIN_16 5
-#define SERVOPIN_17 6
+#define SERVOPIN_16 16
+#define SERVOPIN_17 17
 
 // Single Gait struct definition
 struct Gait {
@@ -25,13 +25,13 @@ struct Gait {
   float cycleRatio;
   float speedFactor;
   float liftHeight;
-  float strideLength;
+  float strideLengthFactor;
   float maxStrideLength;
 
   Gait(const float *offsets_, float cycleRatio, float speedFactor,
        float liftHeight, float strideLength, float maxStrideLength)
       : cycleRatio(cycleRatio), speedFactor(speedFactor),
-        liftHeight(liftHeight), strideLength(strideLength),
+        liftHeight(liftHeight), strideLengthFactor(strideLength),
         maxStrideLength(maxStrideLength) {
     for (int i = 0; i < 6; ++i)
       offsets[i] = offsets_[i];
@@ -43,3 +43,26 @@ enum LegState { Propelling, Lifting, Standing, Reset };
 Vector3 inverseKinematics(Legtype leg, const Vector3 &goal);
 void setServoPositions(Legtype leg, Vector3 angles,
                        Adafruit_PWMServoDriver &controller);
+
+class gaitMode {
+public:
+  void init(const Gait &gait, Legtype leg);
+  void stand(const Gait &gait, Legtype leg);
+  void loop(const Gait &gait, Legtype leg);
+  void exit();
+  Vector3 getGaitCycle(const Gait &gait, Legtype leg);
+
+private:
+  int points = 1000;
+  Vector2 joy1TargetVect;
+  float joy1TargetMagnitude;
+
+  Vector2 joy1CurrentVect;
+  float joy1CurrentMagnitude;
+
+  Vector2 joy2TargetVect;
+  float joy2TargetMagnitude;
+
+  Vector2 joy2CurrentVect;
+  float joy2CurrentMagnitude;
+};
