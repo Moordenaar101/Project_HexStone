@@ -28,12 +28,12 @@ const float rotationMultiplier[6] = {1, 0, -1, 1, 0, -1};
 const float legLandHeight = 25;
 const float legPlacementAngle = 55;
 
-Vector3 inverseKinematics(Legtype leg, const Vector3 &goal) {
+Vector3 inverseKinematics(Vector2 legOrigin, const Vector3 &goal) {
   // Returns a vector3 of angles given a leg object and a goal vector
   // X = coxa angle, Y = femur angle, Z = tibia angle
 
-  const double xDistance = goal.x - leg.legOrigin.x;
-  const double yDistance = goal.y - leg.legOrigin.y;
+  const double xDistance = goal.x - legOrigin.x;
+  const double yDistance = goal.y - legOrigin.y;
 
   const double theta = atan2(yDistance, xDistance);
 
@@ -42,16 +42,16 @@ Vector3 inverseKinematics(Legtype leg, const Vector3 &goal) {
 
   // Calculate the distance from the femur servo to the effective goal
   const double hipToGoalDistance = effectiveGoal.distanceTo(
-      Vector3(leg.legOrigin.x, leg.legOrigin.y, bodyHeight));
+      Vector3(legOrigin.x, legOrigin.y, bodyHeight));
 
   // Adjust goal if out of bounds
   if (hipToGoalDistance > femurLen + tibiaLen)
-    effectiveGoal.lerp(Vector3(leg.legOrigin.x, leg.legOrigin.y, bodyHeight),
+    effectiveGoal.lerp(Vector3(legOrigin.x, legOrigin.y, bodyHeight),
                        1 - (femurLen + tibiaLen - 0.001f) / hipToGoalDistance);
 
   //  accounting for the distance between the coxa and femur servos
-  const Vector3 adjustedDistVect(effectiveGoal.x - leg.legOrigin.x,
-                                 effectiveGoal.y - leg.legOrigin.y,
+  const Vector3 adjustedDistVect(effectiveGoal.x - legOrigin.x,
+                                 effectiveGoal.y - legOrigin.y,
                                  bodyHeight - effectiveGoal.z);
 
   const double h =
@@ -75,8 +75,8 @@ Vector3 inverseKinematics(Legtype leg, const Vector3 &goal) {
 
   if (debug) {
     Serial.println("\n\n\nGoal position: " + goal.toString());
-    Serial.println("Leg Origin: " + String(leg.legOrigin.x) + ", " +
-                   String(leg.legOrigin.y) + ", " + String(bodyHeight));
+    Serial.println("Leg Origin: " + String(legOrigin.x) + ", " +
+                   String(legOrigin.y) + ", " + String(bodyHeight));
     Serial.println("Raw Angles (Rad) : " + String(angles.x) + ", " +
                    String(angles.y) + ", " + String(angles.z));
     Serial.println("Raw Angles (Deg) : " + String(radToDeg(angles.x)) + ", " +
@@ -98,30 +98,7 @@ Vector3 inverseKinematics(Legtype leg, const Vector3 &goal) {
   return angles; // Return the angles in radians
 }
 
-void setServoPositions(Legtype leg, Vector3 angles,
-                       Adafruit_PWMServoDriver &controller) {
-  // This function sets the servo positions for the given leg object
-
-  if (leg.legNumber <= 4) {
-    controller.setPWM(leg.legNumber * 3, 0,
-                      map(angles.x, 0, 180, SERVOMIN, SERVOMAX)); // Coxa
-    controller.setPWM(leg.legNumber * 3 + 1, 0,
-                      map(angles.y, 0, 180, SERVOMIN, SERVOMAX)); // Femur
-    controller.setPWM(leg.legNumber * 3 + 2, 0,
-                      map(angles.z, 0, 180, SERVOMIN, SERVOMAX)); // Tibia
-  } else {
-    // For the last two servos, use analogWrite
-    // This is a workaround for the PCA9685 only having 16 channels
-    // *** This will need to be revisited after the IK has been fully
-    // implemented! ***
-    controller.setPWM(leg.legNumber * 3, 0,
-                      map(angles.x, 0, 180, SERVOMIN, SERVOMAX)); // Coxa
-    analogWrite(SERVOPIN_16, map(angles.x, 0, 180, 0, 255));      // Femur
-    analogWrite(SERVOPIN_17, map(angles.x, 0, 180, 0, 255));      // Tibia
-  }
-}
-
-void gaitMode::init(const Gait &gait, Legtype leg) {
+void gaitMode::init(const Gait &gait) {
   for (int i = 0; i < 6; i++) {
     legStates[i] = Reset; // Reset all leg states
     cycleProgress[i] = gait.offsets[i] * cycleResolution;
@@ -154,8 +131,6 @@ void gaitMode::loop(const Gait &gait, Legtype leg) {
   for (int i = 0; i < 6; i++) {
     tArray[i] = (float)cycleProgress[i] / cycleResolution;
   };
-
-  // Vector3 gaitCycle(gait, leg){}
 }
 
 void gaitMode::exit() {

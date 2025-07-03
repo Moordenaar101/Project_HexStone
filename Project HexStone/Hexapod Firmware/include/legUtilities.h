@@ -21,32 +21,28 @@
 
 // Single Gait struct definition
 struct Gait {
-  float offsets[6];
+  std::vector<float> offsets;
   float cycleRatio;
   float speedFactor;
   float liftHeight;
   float strideLengthFactor;
   float maxStrideLength;
 
-  Gait(const float *offsets_, float cycleRatio, float speedFactor,
+  Gait(const std::vector<float> &offsets_, float cycleRatio, float speedFactor,
        float liftHeight, float strideLength, float maxStrideLength)
-      : cycleRatio(cycleRatio), speedFactor(speedFactor),
+      : offsets(offsets_), cycleRatio(cycleRatio), speedFactor(speedFactor),
         liftHeight(liftHeight), strideLengthFactor(strideLength),
-        maxStrideLength(maxStrideLength) {
-    for (int i = 0; i < 6; ++i)
-      offsets[i] = offsets_[i];
-  }
+        maxStrideLength(maxStrideLength) {}
 };
 
 enum LegState { Propelling, Lifting, Standing, Reset };
 
 Vector3 inverseKinematics(Legtype leg, const Vector3 &goal);
-void setServoPositions(Legtype leg, Vector3 angles,
-                       Adafruit_PWMServoDriver &controller);
+
 
 class gaitMode {
 public:
-  void init(const Gait &gait, Legtype leg);
+  void init(const Gait &gait);
   void stand(const Gait &gait, Legtype leg);
   void loop(const Gait &gait, Legtype leg);
   void exit();

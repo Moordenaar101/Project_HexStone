@@ -1,4 +1,4 @@
-.pio/build/nanoatmega328new/liba90/PS4_Controller_Host/ps4_l2cap.c.o: \
+.pio/build/nanoatmega328new/libb16/PS4_Controller_Host/ps4_l2cap.c.o: \
  .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/ps4_l2cap.c \
  .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/ps4.h \
  .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/ps4_int.h \

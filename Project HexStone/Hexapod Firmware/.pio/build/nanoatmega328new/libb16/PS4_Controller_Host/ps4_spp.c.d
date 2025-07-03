@@ -1,4 +1,4 @@
-.pio/build/nanoatmega328new/liba90/PS4_Controller_Host/ps4_spp.c.o: \
+.pio/build/nanoatmega328new/libb16/PS4_Controller_Host/ps4_spp.c.o: \
  .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/ps4_spp.c \
  C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/bt/include/esp32/include/esp_bt.h \
  C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/esp_common/include/esp_err.h \
