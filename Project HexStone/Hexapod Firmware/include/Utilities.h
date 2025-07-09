@@ -29,6 +29,8 @@ struct Vector2 {
   double distanceTo(const Vector2 &other) const;
   Vector2 lerp(const Vector2 &other, double t) const;
   Vector2 &operator=(const Vector3 &v3);
+
+  String toString() const; // Added toString() method
 };
 
 struct Vector3 {
@@ -57,7 +59,7 @@ struct Vector3 {
   Vector3 lerp(const Vector3 &other, double t) const;
   Vector3 &operator=(const Vector2 &v2);
   String toString() const;
-  Vector3 rotate(int angle, Vector2 pivot);
+  Vector3 rotate(float angle, Vector2 pivot);
 };
 
 struct Legtype { // Servo angles are from -90° → 90°

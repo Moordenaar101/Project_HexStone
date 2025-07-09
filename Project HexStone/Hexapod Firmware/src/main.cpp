@@ -24,19 +24,23 @@ Vector3 cycleStartPoints[6];
 float tArray[6];
 
 // The Current height of the hexapod from the ground
-float frameHeight = 45;
+float frameHeight = 75;
 
 // A multiplier for the global rotation of the hexapod
 const float globalRotationFactor = 0.1;
 
+// A multiplier for the global lift height of the hexapod
+const float globalLiftFactor = 0.8;
+
 // A multiplier for the global strafe of the hexapod
 const float globalStrideFactor = 0.1;
 
-// Distance from the center of the hexapod to the coxa of each leg
-const int centerDist = 100;
+// A currently arbetrary value. Using it until I don't need it or figure out
+// what it does
+const int centerDist = 150;
 
 // Multipliers for the stride rotation of each leg
-const float strideMultiplier[6] = {-1, -1, -1, 1, 1, 1};
+const float strideMultiplier[6] = {1, 1, 1, -1, -1, -1};
 
 // Multipliers for the rotation of each legs cycle
 const float rotationMultiplier[6] = {1, 0, -1, 1, 0, -1};
@@ -80,6 +84,10 @@ Vector2 joy2CurrentVect;
 // Right Joysticks Current Magnitude
 float joy2CurrentMagnitude;
 
+// Offest used to ensure the leg will move away from the hexapod body as it
+// lifts off the ground
+Vector2 legLiftClearanceVect = Vector2(25, 25);
+
 void initGait();
 void standGait();
 void loopGait();
@@ -87,38 +95,42 @@ void restGait();
 // Given the current gait and a leg, this will return a vector representing the
 // next position of the gait cycle
 Vector3 getGaitCycle(const Gait &gait, Legtype leg);
-void moveToPos(int leg, Vector3 pos);
+void moveToPos(Legtype leg, Vector3 pos);
 
 /*************************************************************************/
 
 Adafruit_PWMServoDriver pcaDriver = Adafruit_PWMServoDriver();
 
 /*** TEMPERARY VARIABLE DECLARATION ***/
-int coxaLen = 45.0f;     // Length of the coxa segment
-int femurLen = 100.0f;   // Length of the femur segment
-int tibiaLen = 180.0f;   // Length of the tibia segment
-float bodyHeight = 50.0; // Height of the chassis, used for gait calculations
+float coxaLen = 45.0;    // Length of the coxa segment
+float femurLen = 100.0;  // Length of the femur segment
+float tibiaLen = 180.0;  // Length of the tibia segment
+float bodyHeight = 75.0; // Height of the chassis, used for gait calculations
 Legtype legs[NUM_LEGS];  // Placeholder for Servo Data
 String servoNames[3] = {"Coxa", "Femur", "Tibia"}; // Names for each servo
-// const Vector2 legOrigins[6] = { // For testing!
-//     Vector2(-70, 85), Vector2(-70, 0), Vector2(-70, -85),
-//     Vector2(70, -85), Vector2(70, 0),  Vector2(70, 85)}; // Leg origins
-// const Vector2 gaitOrigins[6] = {
-//     Vector2(-150, 200), Vector2(-170, 0), Vector2(-150, -200),
-//     Vector2(150, -200), Vector2(170, 0),  Vector2(150, 200)}; // Gait origins
-const Vector2 legOrigins[6] = {
-    Vector2(0, 0), Vector2(0, 0), Vector2(0, 0),
-    Vector2(0, 0), Vector2(0, 0), Vector2(0, 0),
-};
-const Vector2 gaitOrigins[6] = {Vector2(150, 0)};
+const Vector2 legOrigins[6] = {                    // For testing!
+    Vector2(-70, 85), Vector2(-70, 0), Vector2(-70, -85),
+    Vector2(70, -85), Vector2(70, 0),  Vector2(70, 85)}; // Leg origins
+const Vector2 gaitOrigins[6] = {
+    Vector2(-200, 200), Vector2(-170, 0), Vector2(-150, -200),
+    Vector2(150, -200), Vector2(170, 0),  Vector2(150, 200)}; // Gait origins
+// const Vector2 legOrigins[6] = {
+//     Vector2(0, 0), Vector2(0, 0), Vector2(0, 0),
+//     Vector2(0, 0), Vector2(0, 0), Vector2(0, 0),
+// };
+// const Vector2 gaitOrigins[6] = {Vector2(150, 0)};
 bool debug = false; // Debug flag
 
 Gait gait({0.0, 0.5, 0.0, 0.5, 0.0, 0.5}, // offsets
           0.5,                            // cycleRatio
-          1.0,                            // speedFactor
-          10.0,                           // liftHeight
+          0.25,                           // speedFactor
+          50.0,                           // liftHeight
           1.0,                            // strideLengthFactor
-          50.0);
+          100.0);                         // maxStrideLength
+
+float test = 0.0;
+bool flip = true;
+Vector3 testPos(270, 0, 0);
 
 /**************************************/
 
@@ -150,25 +162,61 @@ Gait gait({0.0, 0.5, 0.0, 0.5, 0.0, 0.5}, // offsets
              \\
 */
 
-void setServoPositions(Legtype leg, Vector3 angles) {
+void setServoPositions(int legNum, Vector3 angles, bool debug = false) {
   // This function sets the servo positions for the given leg object
 
-  if (leg.legNumber <= 4) {
-    pcaDriver.setPWM(leg.legNumber * 3, 0,
-                     map(angles.x, 0, 180, SERVOMIN, SERVOMAX)); // Coxa
-    pcaDriver.setPWM(leg.legNumber * 3 + 1, 0,
-                     map(angles.y, 0, 180, SERVOMIN, SERVOMAX)); // Femur
-    pcaDriver.setPWM(leg.legNumber * 3 + 2, 0,
-                     map(angles.z, 0, 180, SERVOMIN, SERVOMAX)); // Tibia
+  Serial.print(", Angle Z: " + degrees(angles).toString());
+
+  if (!debug) {
+    if (legNum <= 4) {
+      // pcaDriver.setPWM(
+      //     legNum * 3, 0,
+      //     fastMap(angles.x, 0, M_PI, SERVOMIN, SERVOMAX)); // Coxa
+      // pcaDriver.setPWM(
+      //     legNum * 3 + 1, 0,
+      //     fastMap(M_PI - angles.y, 0, M_PI, SERVOMIN, SERVOMAX)); //
+      //     Femur
+      // pcaDriver.setPWM(
+      //     legNum * 3 + 2, 0,
+      //     fastMap(angles.z, 0, M_PI, SERVOMIN, SERVOMAX)); // Tibia
+
+      pcaDriver.setPWM(
+          0, 0,
+          constrain(fastMap(angles.x, -M_PI / 2, M_PI / 2, SERVOMIN, SERVOMAX),
+                    SERVOMIN, SERVOMAX)); // Coxa
+      pcaDriver.setPWM(
+          1, 0,
+          constrain(fastMap(angles.y, -M_PI / 2, M_PI / 2, SERVOMIN, SERVOMAX),
+                    SERVOMIN, SERVOMAX)); // Femur
+      pcaDriver.setPWM(
+          2, 0,
+          constrain(fastMap(-angles.z, -M_PI / 2, M_PI / 2, SERVOMIN, SERVOMAX),
+                    SERVOMIN, SERVOMAX)); // Tibia
+    } else {
+      // For the last two servos, use analogWrite
+      // This is a workaround for the PCA9685 only having 16 channels
+      // *** This will need to be revisited after the IK has been fully
+      // implemented! ***
+      pcaDriver.setPWM(legNum * 3, 0,
+                       fastMap(angles.x, 0, M_PI, SERVOMIN, SERVOMAX)); // Coxa
+      analogWrite(SERVOPIN_16, fastMap(angles.x, 0, M_PI, 0, 255));     // Femur
+      analogWrite(SERVOPIN_17, fastMap(angles.x, 0, M_PI, 0, 255));     // Tibia
+    }
   } else {
-    // For the last two servos, use analogWrite
-    // This is a workaround for the PCA9685 only having 16 channels
-    // *** This will need to be revisited after the IK has been fully
-    // implemented! ***
-    pcaDriver.setPWM(leg.legNumber * 3, 0,
-                     map(angles.x, 0, 180, SERVOMIN, SERVOMAX)); // Coxa
-    analogWrite(SERVOPIN_16, map(angles.x, 0, 180, 0, 255));     // Femur
-    analogWrite(SERVOPIN_17, map(angles.x, 0, 180, 0, 255));     // Tibia
+    angles.x = radToDeg(angles.x);
+    angles.y = radToDeg(angles.y);
+    angles.z = radToDeg(angles.z);
+
+    // Print the angles to the serial monitor
+    Serial.print(">> Leg: ");
+    Serial.print(legNum);
+    Serial.print(" [Coxa: ");
+    Serial.print(angles.x);
+    Serial.print("] [Femur: ");
+    Serial.print(angles.y);
+    Serial.print("] [Tibia: ");
+    Serial.print(angles.z);
+    Serial.println("]");
   }
 }
 
@@ -218,10 +266,8 @@ int debounceTime = 5;
 gaitMode gait_mode; // Instance of gaitMode
 
 void loop() {
-
   // --- Added for pin 19 toggle logic ---
   ControllerData ctrl = getJoystickData();
-  delay(1);
   if (ctrl.buttonCross && debounceTime > 5) {
     pin19State = !pin19State;
     digitalWrite(19, pin19State ? HIGH : LOW);
@@ -229,15 +275,77 @@ void loop() {
   } else if (!ctrl.buttonCross) {
     debounceTime++;
   }
+  if (ctrl.buttonSquare) {
+    Serial.println("Press Triangle to exit");
+    while (!getJoystickData().buttonTriangle) {
+      delay(100);
+    }
+  }
+  delay(10);
+
+  // --- IK test input via serial monitor ---
+  if (Serial.available()) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    double x, y, z;
+    int n = sscanf(input.c_str(), "%lf %lf %lf", &x, &y, &z);
+    if (n == 3) {
+      Vector3 goal(x, y, z);
+      Serial.println("Goal: " + goal.toString());
+      Vector3 angles =
+          inverseKinematics(legs[4].legOrigin, legs[4].coxaAngle, goal);
+      Serial.print("IK angles (rad): ");
+      Serial.print(angles.x, 5);
+      Serial.print(", ");
+      Serial.print(angles.y, 5);
+      Serial.print(", ");
+      Serial.println(angles.z, 5);
+      Serial.print("IK angles (deg): ");
+      Serial.print(radToDeg(angles.x), 2);
+      Serial.print(", ");
+      Serial.print(radToDeg(angles.y), 2);
+      Serial.print(", ");
+      Serial.println(radToDeg(angles.z), 2);
+      setServoPositions(4, angles, false);
+    } else {
+      Serial.println("Usage: x y z");
+    }
+  }
+  // ---------------------------------------
+
+  if (flip) {
+    test += 0.003;
+    flip = test >= 1 ? false : true;
+    setServoPositions(
+        4, inverseKinematics(
+               legs[4].legOrigin, legs[4].coxaAngle,
+               Vector3(270, -100, 0).lerp(Vector3(270, 100, 0), test)));
+  } else {
+    test -= 0.003;
+    flip = test <= 0 ? true : false;
+    setServoPositions(
+        4, inverseKinematics(
+               legs[4].legOrigin, legs[4].coxaAngle,
+               Vector3(270, 100, 0).lerp(Vector3(270, -100, 0), 1 - test)));
+  }
+  // Serial.println(
+  //     Vector3(270, 100, 0).lerp(Vector3(270, -100, 0), 1 - test).toString());
+
+  // setServoPositions(4, Vector3(0, 0, 0));
+
+  if (PS4.isConnected()) {
+    loopGait();
+  }
 
   // pcaDriver.setPWM(
-  //     0, 0, float(fastMap(ctrl.leftStick.x, -127, 127, SERVOMIN, SERVOMAX)));
+  //     0, 0, float(fastMap(ctrl.leftStick.x, -127, 127, SERVOMIN,
+  //     SERVOMAX)));
   // pcaDriver.setPWM(
-  //     1, 0, float(fastMap(ctrl.leftStick.y, -127, 127, SERVOMIN, SERVOMAX)));
+  //     1, 0, float(fastMap(ctrl.leftStick.y, -127, 127, SERVOMIN,
+  //     SERVOMAX)));
   // pcaDriver.setPWM(
   //     2, 0, float(fastMap(ctrl.rightStick.y, -127, 127, SERVOMIN,
   //     SERVOMAX)));
-  setServoPositions(legs[0], inverseKinematics(legs[0], Vector3()));
   // ------------------------------------
 }
 
@@ -251,24 +359,32 @@ void initGait() {
 void standGait() {}
 
 void loopGait() {
-  joy1TargetVect = {
-      (float)map(getJoystickData().leftStick.x, -127, 127, -100, 100),
-      (float)map(getJoystickData().leftStick.y, -127, 127, -100, 100)};
+  ControllerData joyData = getJoystickData();
+  if (joyData.leftStick.x > 8 || joyData.leftStick.x < -8) {
+    joy1TargetVect.x = (float)map(joyData.leftStick.x, -127, 127, -100, 100);
+  } else {
+    joy1TargetVect.x = 0;
+  }
+  if (joyData.leftStick.y > 8 || joyData.leftStick.y < -8) {
+    joy1TargetVect.y = (float)map(joyData.leftStick.y, -127, 127, -100, 100);
+  } else {
+    joy1TargetVect.y = 0;
+  }
 
   joy1TargetMagnitude =
       constrain(hypot(joy1TargetVect.x, joy1TargetVect.y), 0, 100);
 
-  joy2TargetVect = {
-      (float)map(getJoystickData().rightStick.x, -127, 127, -100, 100),
-      (float)map(getJoystickData().rightStick.y, -127, 127, -100, 100)};
+  joy2TargetVect = {(float)map(joyData.rightStick.x, -127, 127, -100, 100),
+                    (float)map(joyData.rightStick.y, -127, 127, -100, 100)};
 
   joy2TargetMagnitude =
       constrain(hypot(joy2TargetVect.x, joy2TargetVect.y), 0, 100);
 
-  joy1CurrentVect.lerp(joy1TargetVect, 0.04);
+  joy1CurrentVect = joy1CurrentVect.lerp(joy1TargetVect, 0.04);
+
   joy1CurrentMagnitude = lerp(joy1CurrentMagnitude, joy1TargetMagnitude, 0.04);
 
-  joy2CurrentVect.lerp(joy2TargetVect, 0.06);
+  joy2CurrentVect = joy2CurrentVect.lerp(joy2TargetVect, 0.06);
   joy2CurrentMagnitude = lerp(joy2CurrentMagnitude, joy2TargetMagnitude, 0.06);
 
   for (int i = 0; i < 6; i++) {
@@ -278,16 +394,21 @@ void loopGait() {
   forwardAmount = joy1CurrentMagnitude;
   turnAmount = joy2CurrentVect.x;
 
-  moveToPos(0, getGaitPoint(0, cGait.pushFraction));
-  moveToPos(1, getGaitPoint(1, cGait.pushFraction));
-  moveToPos(2, getGaitPoint(2, cGait.pushFraction));
-  moveToPos(3, getGaitPoint(3, cGait.pushFraction));
-  moveToPos(4, getGaitPoint(4, cGait.pushFraction));
-  moveToPos(5, getGaitPoint(5, cGait.pushFraction));
+  // for (int i = 0; i < NUM_LEGS; i++) { // Move each leg one gait cycle step
+  //   legs[i].footPosition = getGaitCycle(gait, legs[i]);
+  //   moveToPos(legs[i], legs[i].footPosition);
+  // }
 
-  float progressChangeAmount = max(abs(forwardAmount), abs(turnAmount)) *
-                               cGait.gaitSpeedMult * globalSpeedMult *
-                               potRightPercentage;
+  // Serial.println(getGaitCycle(gait, legs[0]).toString());
+
+  legs[0].footPosition = getGaitCycle(gait, legs[0]);
+  // Serial.println(
+  //     inverseKinematics(legs[0].legOrigin, legs[4].coxaAngle,
+  //     legs[0].footPosition).toString());
+  // Serial.println(legs[0].footPosition.toString());
+
+  float progressChangeAmount =
+      max(abs(forwardAmount), abs(turnAmount)) * gait.speedFactor;
 
   // update the cycle progress for each leg
   for (int i = 0; i < 6; i++) {
@@ -297,11 +418,15 @@ void loopGait() {
     if (cycleProgress[i] >= points)
       cycleProgress[i] = cycleProgress[i] - points;
   }
+  // setServoPositions(
+  //     0, inverseKinematics(legs[0].legOrigin, legs[4].coxaAngle,
+  //     Vector3(-150, 150, 0)), debug);
 }
 
 void restGait() {}
 
-Vector3 getGaitCycle(const Gait &gait, Legtype leg) {
+Vector3 getGaitCycle(const Gait &gait,
+                     Legtype leg) { // Aiming for ~(-180, 240, 0)
 
   // The amount of rotation of the leg based on the right joysticks X axis
   float rotationAmount = joy2CurrentVect.x * globalRotationFactor;
@@ -317,7 +442,7 @@ Vector3 getGaitCycle(const Gait &gait, Legtype leg) {
   // The current progress of the gait cycle for the leg
   float t = tArray[leg.legNumber];
 
-  if (t < gait.cycleRatio) { // Pushing phase
+  if (t < gait.cycleRatio) { // Propelling phase
     if (legStates[leg.legNumber] != Propelling)
       cycleStartPoints[leg.legNumber] = leg.footPosition;
     legStates[leg.legNumber] = Propelling;
@@ -327,19 +452,38 @@ Vector3 getGaitCycle(const Gait &gait, Legtype leg) {
     // Starting point of the strafing line
     vector<Vector3> strafeControlPoints = vector<Vector3>(2);
     strafeControlPoints[0] = cycleStartPoints[leg.legNumber];
+    strafeControlPoints[0].z = 0;
 
     // Ending point of the strafing line
-    strafeControlPoints[1] =
-        Vector3(strafeStrideLength.y * strideMultiplier[leg.legNumber], // X
-                -strafeStrideLength.x * strideMultiplier[leg.legNumber] +
-                    centerDist, // Y
-                frameHeight     // Z
-                )
-            .rotate(legPlacementAngle * rotationMultiplier[leg.legNumber],
-                    Vector2(0, centerDist));
+    // strafeControlPoints[1] =
+    // Vector3(leg.gaitOrigin.x + strafeStrideLength.y *
+    // strideMultiplier[leg.legNumber], // X
+    //         -strafeStrideLength.x * strideMultiplier[leg.legNumber] +
+    //             centerDist, // Y
+    //         0                                              // Z
+    //         )
+    //     .rotate(legPlacementAngle * rotationMultiplier[leg.legNumber],
+    //             Vector2(0, centerDist));
+
+    strafeControlPoints[1] = Vector3((leg.gaitOrigin.x + strafeStrideLength.x) *
+                                         strideMultiplier[leg.legNumber], // X
+                                     (leg.gaitOrigin.y + strafeStrideLength.y) *
+                                         strideMultiplier[leg.legNumber], // Y
+                                     0                                    // Z
+    );
 
     Vector3 strafePoint = GetPointOnBezierCurve(
         strafeControlPoints, fastMap(t, 0, gait.cycleRatio, 0, 1));
+
+    // Serial.println("\n\nStrafeControlPoints:\nT = " +
+    //                String(fastMap(t, 0, gait.cycleRatio, 0, 1)) + "\n" +
+    //                strafeControlPoints[0].toString() + "\n" +
+    //                strafeControlPoints[1].toString() +
+    //                "\n(0, 0, 0)\n(0, 0, 0)" +
+    //                "\nPoint: " + strafePoint.toString() +
+    //                "\nSS Length: " + strafeStrideLength.toString());
+    // delay(100);
+
     //-------------------------------------------------------------------------------//
 
     // Starting point of the curve
@@ -347,20 +491,23 @@ Vector3 getGaitCycle(const Gait &gait, Legtype leg) {
     rotateControlPoints[0] = cycleStartPoints[leg.legNumber];
 
     // Middle point of the curve
-    rotateControlPoints[1] = Vector3(0,          // X
-                                     centerDist, // Y
-                                     frameHeight // Z
+    rotateControlPoints[1] = Vector3(leg.gaitOrigin.x, // X
+                                     0,                // Y
+                                     0                 // Z
     );
 
     // Ending point of the curve
-    rotateControlPoints[2] = Vector3(rotationAmount, // X
-                                     centerDist,     // Y
-                                     frameHeight     // Z
+    rotateControlPoints[2] = Vector3(leg.gaitOrigin.x + rotationAmount, // X
+                                     0,                                 // Y
+                                     0                                  // Z
     );
 
     Vector3 rotatePoint = GetPointOnBezierCurve(
         rotateControlPoints, fastMap(t, 0, gait.cycleRatio, 0, 1));
     //-------------------------------------------------------------------------------//
+
+    strafePoint.z = 0; // Ensure the strafing point is on the ground
+    rotatePoint.z = 0; // Ensure the rotation point is on the ground
 
     // Return the weighted average of the two points
     return (strafePoint * abs(joy1CurrentMagnitude) +
@@ -383,32 +530,61 @@ Vector3 getGaitCycle(const Gait &gait, Legtype leg) {
 
     // Control point directly above the starting point causing the leg to lift
     // up quickly
-    strafeControlPoints[1] =
-        cycleStartPoints[leg.legNumber] +
-        Vector3(0, 0, gait.liftHeight * globalStrideFactor);
+    strafeControlPoints[1] = cycleStartPoints[leg.legNumber] +
+                             Vector3(cycleStartPoints[leg.legNumber].x,
+                                     cycleStartPoints[leg.legNumber].y,
+                                     gait.liftHeight * globalLiftFactor);
 
     // Control point directly above the ending point preventing the leg from
     // running into the ground
+    // strafeControlPoints[2] =
+    //     Vector3(strafeStrideLength.y * strideMultiplier[leg.legNumber] +
+    //                 gaitOrigins[leg.legNumber].x, // X
+    //             strafeStrideLength.x * strideMultiplier[leg.legNumber] +
+    //                 centerDist + gaitOrigins[leg.legNumber].y, // Y
+    //             0 + legLandHeight                              // Z
+    //             )
+    //         .rotate(legPlacementAngle * rotationMultiplier[leg.legNumber],
+    //                 Vector2(0, centerDist));
+
     strafeControlPoints[2] =
-        Vector3(-strafeStrideLength.y * strideMultiplier[leg.legNumber], // X
-                strafeStrideLength.x * strideMultiplier[leg.legNumber] +
-                    centerDist,             // Y
-                frameHeight + legLandHeight // Z
-                )
-            .rotate(legPlacementAngle * rotationMultiplier[leg.legNumber],
-                    Vector2(0, centerDist));
+        Vector3((gaitOrigins[leg.legNumber].x + strafeStrideLength.x) *
+                    strideMultiplier[leg.legNumber], // X
+                (gaitOrigins[leg.legNumber].y + strafeStrideLength.y) *
+                    strideMultiplier[leg.legNumber], // Y
+                0 + legLandHeight                    // Z
+        );
 
     // Ending point of the curve
+    // strafeControlPoints[3] =
+    //     Vector3(-strafeStrideLength.y * strideMultiplier[leg.legNumber] +
+    //                 gaitOrigins[leg.legNumber].x,
+    //             strafeStrideLength.x * strideMultiplier[leg.legNumber] +
+    //                 centerDist + gaitOrigins[leg.legNumber].y,
+    //             0)
+    //         .rotate(legPlacementAngle * rotationMultiplier[leg.legNumber],
+    //                 Vector2(0, centerDist));
+
     strafeControlPoints[3] =
-        Vector3(-strafeStrideLength.y * strideMultiplier[leg.legNumber],
-                strafeStrideLength.x * strideMultiplier[leg.legNumber] +
-                    centerDist,
-                frameHeight)
-            .rotate(legPlacementAngle * rotationMultiplier[leg.legNumber],
-                    Vector2(0, centerDist));
+        Vector3((gaitOrigins[leg.legNumber].x + strafeStrideLength.x) *
+                    strideMultiplier[leg.legNumber], // X
+                (gaitOrigins[leg.legNumber].y + strafeStrideLength.y) *
+                    strideMultiplier[leg.legNumber], // Y
+                0);                                  // Z
 
     Vector3 straightPoint = GetPointOnBezierCurve(
         strafeControlPoints, fastMap(t, gait.cycleRatio, 1, 0, 1));
+
+    // Serial.println("\n\nStrafeControlPoints:\nT = " +
+    //                String(fastMap(t, gait.cycleRatio, 1, 0, 1)) + "\n" +
+    //                strafeControlPoints[0].toString() + "\n" +
+    //                strafeControlPoints[1].toString() + "\n" +
+    //                strafeControlPoints[2].toString() + "\n" +
+    //                strafeControlPoints[3].toString() +
+    //                "\nPoint: " + straightPoint.toString() +
+    //                "\nSS Length: " + strafeStrideLength.toString());
+    // delay(100);
+
     //-------------------------------------------------------------------------------//
 
     //------This cycle will cause the hexapod leg to lift up and return to the
@@ -420,30 +596,33 @@ Vector3 getGaitCycle(const Gait &gait, Legtype leg) {
 
     // Control point directly above the starting point causing the leg to lift
     // up quickly
-    rotateControlPoints[1] =
-        cycleStartPoints[leg.legNumber] +
-        Vector3(0, 0, gait.liftHeight * globalStrideFactor);
+    rotateControlPoints[1] = cycleStartPoints[leg.legNumber] +
+                             Vector3(0, 0, gait.liftHeight * globalLiftFactor);
 
-    // Control point at the apex of the curve and offset away from the hexapods
-    // body, cause the leg to lift up and away.
-    rotateControlPoints[2] =
-        Vector3(0,                                                 // X
-                centerDist,                                        // Y
-                frameHeight + gait.liftHeight * globalStrideFactor // Z
-        );
+    // Control point at the apex of the curve and offset away from the
+    // hexapods body, cause the leg to lift up and away.
+    rotateControlPoints[2] = Vector3(
+        leg.gaitOrigin.x + (legLiftClearanceVect.x *
+                            (leg.gaitOrigin.x / abs(leg.gaitOrigin.x))), // X
+        leg.gaitOrigin.y + (legLiftClearanceVect.y *
+                            (leg.gaitOrigin.y / abs(leg.gaitOrigin.y))), // Y
+        0 + gait.liftHeight * globalLiftFactor                           // Z
+    );
 
     // Control point directly above the ending point preventing the leg from
     // running into the ground
-    rotateControlPoints[3] = Vector3(-joy1CurrentMagnitude,      // X
-                                     centerDist,                 // Y
-                                     frameHeight + legLandHeight // Z
-    );
+    rotateControlPoints[3] =
+        Vector3(leg.gaitOrigin.x + joy1CurrentMagnitude, // X
+                leg.gaitOrigin.y,                        // Y
+                legLandHeight                            // Z
+        );
 
     // Ending point of the curve
-    rotateControlPoints[4] = Vector3(-joy1CurrentMagnitude, // X
-                                     centerDist,            // Y
-                                     frameHeight            // Z
-    );
+    rotateControlPoints[4] =
+        Vector3(leg.gaitOrigin.x + joy1CurrentMagnitude, // X
+                leg.gaitOrigin.y,                        // Y
+                0                                        // Z
+        );
 
     Vector3 rotatePoint = GetPointOnBezierCurve(
         rotateControlPoints, fastMap(t, gait.cycleRatio, 1, 0, 1));
@@ -457,6 +636,6 @@ Vector3 getGaitCycle(const Gait &gait, Legtype leg) {
 }
 
 void moveToPos(Legtype leg, Vector3 pos) {
-  Vector3 angles = inverseKinematics(leg.legOrigin, pos);
-  setLegAngles(leg, angles);
+  Vector3 angles = inverseKinematics(leg.legOrigin, legs[4].coxaAngle, pos);
+  setServoPositions(leg.legNumber, angles, true);
 }

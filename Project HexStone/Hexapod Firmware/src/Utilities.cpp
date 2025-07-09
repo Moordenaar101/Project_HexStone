@@ -55,6 +55,10 @@ Vector2 &Vector2::operator=(const Vector3 &v3) {
   return *this;
 }
 
+String Vector2::toString() const {
+  return "(" + String(x) + ", " + String(y) + ")";
+}
+
 // ===================== Vector3 Implementation =====================
 
 Vector3::Vector3() : x(0), y(0), z(0) {}
@@ -114,10 +118,10 @@ Vector3 &Vector3::operator=(const Vector2 &v2) {
 }
 
 String Vector3::toString() const {
-  return String(x) + ", " + String(y) + ", " + String(z);
+  return "(" + String(x) + ", " + String(y) + ", " + String(z) + ")";
 }
 
-Vector3 Vector3::rotate(int angle, Vector2 pivot) {
+Vector3 Vector3::rotate(float angle, Vector2 pivot) {
   // Translate line so pivot point is at the origin
   if (angle == 0)
     return Vector3(x, y, z);
