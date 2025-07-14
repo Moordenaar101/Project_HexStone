@@ -33,8 +33,7 @@ Vector3 inverseKinematics(Vector2 legOrigin, float oldCoxa,
   // Returns a vector3 of angles given a leg object and a goal vector
   // X = coxa angle, Y = femur angle, Z = tibia angle
 
-  Serial.println("\n");
-  Serial.println(goal.toString());
+//   Serial.println("\nGoals: " + goal.toString());
 
   //   const double xDistance = goal.x - legOrigin.x;
   //   const double yDistance = goal.y - legOrigin.y;
@@ -132,15 +131,16 @@ Vector3 inverseKinematics(Vector2 legOrigin, float oldCoxa,
                               -1, 1));
   float theta3 = phi3; // Coxa
 
-//   Serial.println(
-//       "New IK Results: " +
-//       Vector3(degrees(theta1), degrees(theta2), degrees(theta3)).toString());
+  //   Serial.println(
+  //       "New IK Results: " +
+  //       Vector3(degrees(theta1), degrees(theta2),
+  //       degrees(theta3)).toString());
 
   Vector3 angles;
 
-  angles.x = theta1; // Coxa
-  angles.y = theta2; // Femur
-  angles.z = theta3; // Tibia
+  angles.x = theta1;        // Coxa
+  angles.y = theta2;        // Femur
+  angles.z = M_PI - theta3; // Tibia
 
   return angles; // Return the angles in radians
 }

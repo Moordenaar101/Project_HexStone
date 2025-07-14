@@ -6,7 +6,7 @@
 #define NUM_LEGS 6 // The number of legs to be initiated
 
 // Servo PWM/Timing definitions
-#define SERVOMIN 75  // This is the 'minimum' pulse length count (out of 4096)
+#define SERVOMIN 76  // This is the 'minimum' pulse length count (out of 4096)
 #define SERVOMAX 525 // This is the 'maximum' pulse length count (out of 4096)
 #define USMIN                                                                  \
   600 // Rounded 'minimum' microsecond length based on the minimum pulse of 150
@@ -37,7 +37,8 @@ struct Gait {
 
 enum LegState { Propelling, Lifting, Standing, Reset };
 
-Vector3 inverseKinematics(Vector2 legOrigin, float oldCoxa, const Vector3 &goal);
+Vector3 inverseKinematics(Vector2 legOrigin, float oldCoxa,
+                          const Vector3 &goal);
 
 class gaitMode {
 public:

@@ -132,6 +132,16 @@ float test = 0.0;
 bool flip = true;
 Vector3 testPos(270, 0, 0);
 
+vector<Vector3> vectPointsA = {Vector3(-200, 100, -50), Vector3(-200, 100, 0),
+                               Vector3(-200, 0, 100), Vector3(-200, -100, 0),
+                               Vector3(-200, -100, -50)};
+
+vector<Vector3> vectPointsB = {Vector3(200, 100, -50), Vector3(200, 100, 0),
+                               Vector3(200, 0, 100), Vector3(200, -100, 0),
+                               Vector3(200, -100, -50)};
+
+double x = 90.0;
+
 /**************************************/
 
 // Hexapod Layout
@@ -160,15 +170,38 @@ Vector3 testPos(270, 0, 0);
         // \\
  |0 == 1    \\
              \\
+
+Servo Values:
+- Femur IRL
+  Max: 120°
+  Min: 0°
+  Cal: 101°
+
+- Femur IK
+  Max: -60°
+  Min: 65°
+  Cal: -45°
+
+- Tibia IRL
+  Max: 0°
+  Min: 180°
+  Cal: 55°
+
+- Tibia IK
+  Max: 195°
+  Min: 30°
+  Cal: 255°
 */
 
 void setServoPositions(int legNum, Vector3 angles, bool debug = false) {
   // This function sets the servo positions for the given leg object
 
-  Serial.print(", Angle Z: " + degrees(angles).toString());
+  angles = degrees(angles);
+
+  // Serial.println("Angles: " + angles.toString() + "\n\n");
 
   if (!debug) {
-    if (legNum <= 4) {
+    if (legNum == 4) {
       // pcaDriver.setPWM(
       //     legNum * 3, 0,
       //     fastMap(angles.x, 0, M_PI, SERVOMIN, SERVOMAX)); // Coxa
@@ -182,25 +215,27 @@ void setServoPositions(int legNum, Vector3 angles, bool debug = false) {
 
       pcaDriver.setPWM(
           0, 0,
-          constrain(fastMap(angles.x, -M_PI / 2, M_PI / 2, SERVOMIN, SERVOMAX),
+          constrain(fastMap(angles.x + 90, 0, 180, SERVOMIN, SERVOMAX),
                     SERVOMIN, SERVOMAX)); // Coxa
       pcaDriver.setPWM(
           1, 0,
-          constrain(fastMap(angles.y, -M_PI / 2, M_PI / 2, SERVOMIN, SERVOMAX),
-                    SERVOMIN, SERVOMAX)); // Femur
+          constrain(fastMap(angles.y - 4, 0, 180, SERVOMIN, SERVOMAX), SERVOMIN,
+                    SERVOMAX)); // Femur
       pcaDriver.setPWM(
           2, 0,
-          constrain(fastMap(-angles.z, -M_PI / 2, M_PI / 2, SERVOMIN, SERVOMAX),
+          constrain(fastMap(angles.z + 20, 0, 180, SERVOMIN, SERVOMAX),
                     SERVOMIN, SERVOMAX)); // Tibia
     } else {
       // For the last two servos, use analogWrite
       // This is a workaround for the PCA9685 only having 16 channels
       // *** This will need to be revisited after the IK has been fully
       // implemented! ***
-      pcaDriver.setPWM(legNum * 3, 0,
-                       fastMap(angles.x, 0, M_PI, SERVOMIN, SERVOMAX)); // Coxa
-      analogWrite(SERVOPIN_16, fastMap(angles.x, 0, M_PI, 0, 255));     // Femur
-      analogWrite(SERVOPIN_17, fastMap(angles.x, 0, M_PI, 0, 255));     // Tibia
+      // pcaDriver.setPWM(legNum * 3, 0,
+      //                  fastMap(angles.x, 0, M_PI, SERVOMIN, SERVOMAX)); //
+      //                  Coxa
+      // analogWrite(SERVOPIN_16, fastMap(angles.x, 0, M_PI, 0, 255));     //
+      // Femur analogWrite(SERVOPIN_17, fastMap(angles.x, 0, M_PI, 0, 255)); //
+      // Tibia
     }
   } else {
     angles.x = radToDeg(angles.x);
@@ -256,6 +291,8 @@ void setup() {
   digitalWrite(19, HIGH);
 
   initGait(); // Initialize the gait mode for the first leg
+
+  pcaDriver.setPWM(2, 0, fastMap(x, 0, 180, SERVOMIN, SERVOMAX));
 }
 
 // --- Added for pin 19 toggle logic ---
@@ -281,61 +318,159 @@ void loop() {
       delay(100);
     }
   }
-  delay(10);
+  delay(1);
 
   // --- IK test input via serial monitor ---
-  if (Serial.available()) {
-    String input = Serial.readStringUntil('\n');
-    input.trim();
-    double x, y, z;
-    int n = sscanf(input.c_str(), "%lf %lf %lf", &x, &y, &z);
-    if (n == 3) {
-      Vector3 goal(x, y, z);
-      Serial.println("Goal: " + goal.toString());
-      Vector3 angles =
-          inverseKinematics(legs[4].legOrigin, legs[4].coxaAngle, goal);
-      Serial.print("IK angles (rad): ");
-      Serial.print(angles.x, 5);
-      Serial.print(", ");
-      Serial.print(angles.y, 5);
-      Serial.print(", ");
-      Serial.println(angles.z, 5);
-      Serial.print("IK angles (deg): ");
-      Serial.print(radToDeg(angles.x), 2);
-      Serial.print(", ");
-      Serial.print(radToDeg(angles.y), 2);
-      Serial.print(", ");
-      Serial.println(radToDeg(angles.z), 2);
-      setServoPositions(4, angles, false);
-    } else {
-      Serial.println("Usage: x y z");
-    }
-  }
+  // if (Serial.available()) {
+  //   String input = Serial.readStringUntil('\n');
+  //   input.trim();
+  //   double x, y, z;
+  //   int n = sscanf(input.c_str(), "%lf %lf %lf", &x, &y, &z);
+  //   if (n == 3) {
+  //     Vector3 goal(x, y, z);
+  //     Serial.println("Goal: " + goal.toString());
+  //     Vector3 angles =
+  //         inverseKinematics(legs[4].legOrigin, legs[4].coxaAngle, goal);
+  //     Serial.print("IK angles (rad): ");
+  //     Serial.print(angles.x, 5);
+  //     Serial.print(", ");
+  //     Serial.print(angles.y, 5);
+  //     Serial.print(", ");
+  //     Serial.println(angles.z, 5);
+  //     Serial.print("IK angles (deg): ");
+  //     Serial.print(radToDeg(angles.x), 2);
+  //     Serial.print(", ");
+  //     Serial.print(radToDeg(angles.y), 2);
+  //     Serial.print(", ");
+  //     Serial.println(radToDeg(angles.z), 2);
+  //     setServoPositions(4, angles, false);
+  //   } else {
+  //     Serial.println("Usage: x y z");
+  //   }
+  // }
   // ---------------------------------------
 
-  if (flip) {
-    test += 0.003;
-    flip = test >= 1 ? false : true;
-    setServoPositions(
-        4, inverseKinematics(
-               legs[4].legOrigin, legs[4].coxaAngle,
-               Vector3(270, -100, 0).lerp(Vector3(270, 100, 0), test)));
-  } else {
-    test -= 0.003;
-    flip = test <= 0 ? true : false;
-    setServoPositions(
-        4, inverseKinematics(
-               legs[4].legOrigin, legs[4].coxaAngle,
-               Vector3(270, 100, 0).lerp(Vector3(270, -100, 0), 1 - test)));
-  }
+  // --- Servo angle test input via serial monitor ---
+
+  // if (Serial.available()) {
+  //   String input = Serial.readStringUntil('\n');
+  //   input.trim();
+  //   int n = sscanf(input.c_str(), "%lf", &x);
+  //   if (n == 1) {
+  //     Serial.println(x);
+  //     pcaDriver.setPWM(2, 0, fastMap(x, 0.0, 180.0, SERVOMIN, SERVOMAX));
+  //   } else {
+  //     Serial.println("Usage: x y z");
+  //   }
+  // }
+  // ---------------------------------------
+  /* Servo Values:
+  - Femur IRL
+  Max: 120°
+  Min: 0°
+  Cal: 101°
+
+  - Femur IK
+  Max: -60°
+  Min: 65°
+  Cal: -45°
+
+  - Tibia IRL
+  Max: 0°
+  Min: 180°
+  Cal: 55°
+
+  - Tibia IK
+  Max: 195°
+  Min: 30°
+  Cal: 255°
+
+  */
+
+  // if (flip) {
+  //   test += 0.005;
+  //   flip = test >= 1 ? false : true;
+  //   setServoPositions(
+  //       4, inverseKinematics(
+  //              legs[4].legOrigin, legs[4].coxaAngle,
+  //              Vector3(270, -100, 0).lerp(Vector3(270, 100, 0), test)));
+  // } else {
+  //   test -= 0.005;
+  //   flip = test <= 0 ? true : false;
+  //   setServoPositions(
+  //       4, inverseKinematics(
+  //              legs[4].legOrigin, legs[4].coxaAngle,
+  //              Vector3(270, 100, 0).lerp(Vector3(270, -100, 0), 1 - test)));
+  // }
   // Serial.println(
   //     Vector3(270, 100, 0).lerp(Vector3(270, -100, 0), 1 - test).toString());
 
+  if (flip) {
+    test += 0.0075;
+    flip = test >= 1 ? false : true;
+    setServoPositions(
+        0, inverseKinematics(
+               legs[0].legOrigin, legs[0].coxaAngle,
+               Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
+
+    setServoPositions(
+        2, inverseKinematics(
+               legs[2].legOrigin, legs[2].coxaAngle,
+               Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
+
+    setServoPositions(
+        4, inverseKinematics(
+               legs[4].legOrigin, legs[4].coxaAngle,
+               Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
+
+    setServoPositions(
+        1, inverseKinematics(legs[1].legOrigin, legs[1].coxaAngle,
+                             GetPointOnBezierCurve(vectPointsA, test)));
+
+    setServoPositions(
+        3, inverseKinematics(legs[3].legOrigin, legs[3].coxaAngle,
+                             GetPointOnBezierCurve(vectPointsB, test)));
+
+    setServoPositions(
+        5, inverseKinematics(legs[5].legOrigin, legs[5].coxaAngle,
+                             GetPointOnBezierCurve(vectPointsB, test)));
+  } else {
+    test -= 0.0075;
+    flip = test <= 0 ? true : false;
+    setServoPositions(
+        1, inverseKinematics(
+               legs[1].legOrigin, legs[1].coxaAngle,
+               Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
+
+    setServoPositions(
+        3, inverseKinematics(
+               legs[3].legOrigin, legs[3].coxaAngle,
+               Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
+
+    setServoPositions(
+        5, inverseKinematics(
+               legs[5].legOrigin, legs[5].coxaAngle,
+               Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
+
+    setServoPositions(
+        0, inverseKinematics(legs[0].legOrigin, legs[0].coxaAngle,
+                             GetPointOnBezierCurve(vectPointsA, test)));
+
+    setServoPositions(
+        2, inverseKinematics(legs[2].legOrigin, legs[2].coxaAngle,
+                             GetPointOnBezierCurve(vectPointsA, test)));
+
+    setServoPositions(
+        4, inverseKinematics(legs[4].legOrigin, legs[4].coxaAngle,
+                             GetPointOnBezierCurve(vectPointsB, test)));
+  }
+
+  // setServoPositions(4, Vector3(90, 101, 55));
   // setServoPositions(4, Vector3(0, 0, 0));
 
-  if (PS4.isConnected()) {
-    loopGait();
-  }
+  // if (PS4.isConnected()) {
+  //   loopGait();
+  // }
 
   // pcaDriver.setPWM(
   //     0, 0, float(fastMap(ctrl.leftStick.x, -127, 127, SERVOMIN,
@@ -418,9 +553,10 @@ void loopGait() {
     if (cycleProgress[i] >= points)
       cycleProgress[i] = cycleProgress[i] - points;
   }
-  // setServoPositions(
-  //     0, inverseKinematics(legs[0].legOrigin, legs[4].coxaAngle,
-  //     Vector3(-150, 150, 0)), debug);
+
+  legs[4].footPosition = getGaitCycle(gait, legs[4]);
+  setServoPositions(4, inverseKinematics(legs[4].legOrigin, legs[4].coxaAngle,
+                                         legs[4].footPosition));
 }
 
 void restGait() {}
@@ -627,6 +763,9 @@ Vector3 getGaitCycle(const Gait &gait,
     Vector3 rotatePoint = GetPointOnBezierCurve(
         rotateControlPoints, fastMap(t, gait.cycleRatio, 1, 0, 1));
     //-------------------------------------------------------------------------------//
+
+    // Serial.println("Straight Point: " + straightPoint.toString() +
+    //                "\nRotate Point: " + rotatePoint.toString());
 
     // Return the weighted average of the two points
     return (straightPoint * abs(joy1CurrentMagnitude) +
