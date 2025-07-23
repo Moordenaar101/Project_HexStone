@@ -88,6 +88,10 @@ float joy2CurrentMagnitude;
 // lifts off the ground
 Vector2 legLiftClearanceVect = Vector2(25, 25);
 
+float walkSpeed = 0.0075;
+
+// enum walkMode { staticWalk, dynamicWalk, debugWalk, displayWalk };
+
 void initGait();
 void standGait();
 void loopGait();
@@ -277,7 +281,6 @@ void setup() {
     legs[i].footPosition = gaitOrigins[i];
   }
 
-  PS4.attach(notify);
   PS4.attachOnConnect(onConnect);
   PS4.attachOnDisconnect(onDisConnect);
   PS4.begin();
@@ -320,157 +323,9 @@ void loop() {
   }
   delay(1);
 
-  // --- IK test input via serial monitor ---
-  // if (Serial.available()) {
-  //   String input = Serial.readStringUntil('\n');
-  //   input.trim();
-  //   double x, y, z;
-  //   int n = sscanf(input.c_str(), "%lf %lf %lf", &x, &y, &z);
-  //   if (n == 3) {
-  //     Vector3 goal(x, y, z);
-  //     Serial.println("Goal: " + goal.toString());
-  //     Vector3 angles =
-  //         inverseKinematics(legs[4].legOrigin, legs[4].coxaAngle, goal);
-  //     Serial.print("IK angles (rad): ");
-  //     Serial.print(angles.x, 5);
-  //     Serial.print(", ");
-  //     Serial.print(angles.y, 5);
-  //     Serial.print(", ");
-  //     Serial.println(angles.z, 5);
-  //     Serial.print("IK angles (deg): ");
-  //     Serial.print(radToDeg(angles.x), 2);
-  //     Serial.print(", ");
-  //     Serial.print(radToDeg(angles.y), 2);
-  //     Serial.print(", ");
-  //     Serial.println(radToDeg(angles.z), 2);
-  //     setServoPositions(4, angles, false);
-  //   } else {
-  //     Serial.println("Usage: x y z");
-  //   }
-  // }
-  // ---------------------------------------
-
-  // --- Servo angle test input via serial monitor ---
-
-  // if (Serial.available()) {
-  //   String input = Serial.readStringUntil('\n');
-  //   input.trim();
-  //   int n = sscanf(input.c_str(), "%lf", &x);
-  //   if (n == 1) {
-  //     Serial.println(x);
-  //     pcaDriver.setPWM(2, 0, fastMap(x, 0.0, 180.0, SERVOMIN, SERVOMAX));
-  //   } else {
-  //     Serial.println("Usage: x y z");
-  //   }
-  // }
-  // ---------------------------------------
-  /* Servo Values:
-  - Femur IRL
-  Max: 120°
-  Min: 0°
-  Cal: 101°
-
-  - Femur IK
-  Max: -60°
-  Min: 65°
-  Cal: -45°
-
-  - Tibia IRL
-  Max: 0°
-  Min: 180°
-  Cal: 55°
-
-  - Tibia IK
-  Max: 195°
-  Min: 30°
-  Cal: 255°
-
-  */
-
-  // if (flip) {
-  //   test += 0.005;
-  //   flip = test >= 1 ? false : true;
-  //   setServoPositions(
-  //       4, inverseKinematics(
-  //              legs[4].legOrigin, legs[4].coxaAngle,
-  //              Vector3(270, -100, 0).lerp(Vector3(270, 100, 0), test)));
-  // } else {
-  //   test -= 0.005;
-  //   flip = test <= 0 ? true : false;
-  //   setServoPositions(
-  //       4, inverseKinematics(
-  //              legs[4].legOrigin, legs[4].coxaAngle,
-  //              Vector3(270, 100, 0).lerp(Vector3(270, -100, 0), 1 - test)));
-  // }
-  // Serial.println(
-  //     Vector3(270, 100, 0).lerp(Vector3(270, -100, 0), 1 - test).toString());
-
-  if (flip) {
-    test += 0.0075;
-    flip = test >= 1 ? false : true;
-    setServoPositions(
-        0, inverseKinematics(
-               legs[0].legOrigin, legs[0].coxaAngle,
-               Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
-
-    setServoPositions(
-        2, inverseKinematics(
-               legs[2].legOrigin, legs[2].coxaAngle,
-               Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
-
-    setServoPositions(
-        4, inverseKinematics(
-               legs[4].legOrigin, legs[4].coxaAngle,
-               Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
-
-    setServoPositions(
-        1, inverseKinematics(legs[1].legOrigin, legs[1].coxaAngle,
-                             GetPointOnBezierCurve(vectPointsA, test)));
-
-    setServoPositions(
-        3, inverseKinematics(legs[3].legOrigin, legs[3].coxaAngle,
-                             GetPointOnBezierCurve(vectPointsB, test)));
-
-    setServoPositions(
-        5, inverseKinematics(legs[5].legOrigin, legs[5].coxaAngle,
-                             GetPointOnBezierCurve(vectPointsB, test)));
-  } else {
-    test -= 0.0075;
-    flip = test <= 0 ? true : false;
-    setServoPositions(
-        1, inverseKinematics(
-               legs[1].legOrigin, legs[1].coxaAngle,
-               Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
-
-    setServoPositions(
-        3, inverseKinematics(
-               legs[3].legOrigin, legs[3].coxaAngle,
-               Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
-
-    setServoPositions(
-        5, inverseKinematics(
-               legs[5].legOrigin, legs[5].coxaAngle,
-               Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
-
-    setServoPositions(
-        0, inverseKinematics(legs[0].legOrigin, legs[0].coxaAngle,
-                             GetPointOnBezierCurve(vectPointsA, test)));
-
-    setServoPositions(
-        2, inverseKinematics(legs[2].legOrigin, legs[2].coxaAngle,
-                             GetPointOnBezierCurve(vectPointsA, test)));
-
-    setServoPositions(
-        4, inverseKinematics(legs[4].legOrigin, legs[4].coxaAngle,
-                             GetPointOnBezierCurve(vectPointsB, test)));
+  if (PS4.isConnected()) {
+    loopGait();
   }
-
-  // setServoPositions(4, Vector3(90, 101, 55));
-  // setServoPositions(4, Vector3(0, 0, 0));
-
-  // if (PS4.isConnected()) {
-  //   loopGait();
-  // }
 
   // pcaDriver.setPWM(
   //     0, 0, float(fastMap(ctrl.leftStick.x, -127, 127, SERVOMIN,
@@ -777,4 +632,87 @@ Vector3 getGaitCycle(const Gait &gait,
 void moveToPos(Legtype leg, Vector3 pos) {
   Vector3 angles = inverseKinematics(leg.legOrigin, legs[4].coxaAngle, pos);
   setServoPositions(leg.legNumber, angles, true);
+}
+
+void displayWalk(float increment) {
+
+  if (flip) {
+    test += increment;
+    flip = test >= 1 ? false : true;
+    setServoPositions(
+        0, inverseKinematics(
+               legs[0].legOrigin, legs[0].coxaAngle,
+               Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
+
+    setServoPositions(
+        2, inverseKinematics(
+               legs[2].legOrigin, legs[2].coxaAngle,
+               Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
+
+    setServoPositions(
+        4, inverseKinematics(
+               legs[4].legOrigin, legs[4].coxaAngle,
+               Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
+
+    setServoPositions(
+        1, inverseKinematics(legs[1].legOrigin, legs[1].coxaAngle,
+                             GetPointOnBezierCurve(vectPointsA, test)));
+
+    setServoPositions(
+        3, inverseKinematics(legs[3].legOrigin, legs[3].coxaAngle,
+                             GetPointOnBezierCurve(vectPointsB, test)));
+
+    setServoPositions(
+        5, inverseKinematics(legs[5].legOrigin, legs[5].coxaAngle,
+                             GetPointOnBezierCurve(vectPointsB, test)));
+  } else {
+    test -= increment;
+    flip = test <= 0 ? true : false;
+    setServoPositions(
+        1, inverseKinematics(
+               legs[1].legOrigin, legs[1].coxaAngle,
+               Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
+
+    setServoPositions(
+        3, inverseKinematics(
+               legs[3].legOrigin, legs[3].coxaAngle,
+               Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
+
+    setServoPositions(
+        5, inverseKinematics(
+               legs[5].legOrigin, legs[5].coxaAngle,
+               Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
+
+    setServoPositions(
+        0, inverseKinematics(legs[0].legOrigin, legs[0].coxaAngle,
+                             GetPointOnBezierCurve(vectPointsA, test)));
+
+    setServoPositions(
+        2, inverseKinematics(legs[2].legOrigin, legs[2].coxaAngle,
+                             GetPointOnBezierCurve(vectPointsA, test)));
+
+    setServoPositions(
+        4, inverseKinematics(legs[4].legOrigin, legs[4].coxaAngle,
+                             GetPointOnBezierCurve(vectPointsB, test)));
+  }
+}
+
+void displayIK(float increment) {
+  Serial.println("Displayng IK Example");
+
+  if (flip) {
+    test += increment;
+    flip = test >= 1 ? false : true;
+    setServoPositions(
+        4, inverseKinematics(
+               legs[4].legOrigin, legs[4].coxaAngle,
+               Vector3(200, -100, 0).lerp(Vector3(200, 100, 0), test)));
+  } else {
+    test -= increment;
+    flip = test <= 0 ? true : false;
+    setServoPositions(
+        4, inverseKinematics(
+               legs[4].legOrigin, legs[4].coxaAngle,
+               Vector3(200, 100, 0).lerp(Vector3(200, -100, 0), 1 - test)));
+  }
 }
