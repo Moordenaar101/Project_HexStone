@@ -37,8 +37,7 @@ struct Gait {
 
 enum LegState { Propelling, Lifting, Standing, Reset };
 
-Vector3 inverseKinematics(Vector2 legOrigin, float oldCoxa,
-                          const Vector3 &goal);
+Vector3 inverseKinematics(Vector2 legOrigin, const Vector3 &goal);
 
 class gaitMode {
 public:

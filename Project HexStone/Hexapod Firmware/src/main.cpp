@@ -96,6 +96,7 @@ void initGait();
 void standGait();
 void loopGait();
 void restGait();
+void demoStand(int stepCount);
 // Given the current gait and a leg, this will return a vector representing the
 // next position of the gait cycle
 Vector3 getGaitCycle(const Gait &gait, Legtype leg);
@@ -113,8 +114,8 @@ float bodyHeight = 75.0; // Height of the chassis, used for gait calculations
 Legtype legs[NUM_LEGS];  // Placeholder for Servo Data
 String servoNames[3] = {"Coxa", "Femur", "Tibia"}; // Names for each servo
 const Vector2 legOrigins[6] = {                    // For testing!
-    Vector2(-70, 85), Vector2(-70, 0), Vector2(-70, -85),
-    Vector2(70, -85), Vector2(70, 0),  Vector2(70, 85)}; // Leg origins
+    Vector2(-70, 85), Vector2(-100, 0), Vector2(-70, -85),
+    Vector2(70, -85), Vector2(100, 0),  Vector2(70, 85)}; // Leg origins
 const Vector2 gaitOrigins[6] = {
     Vector2(-200, 200), Vector2(-170, 0), Vector2(-150, -200),
     Vector2(150, -200), Vector2(170, 0),  Vector2(150, 200)}; // Gait origins
@@ -200,7 +201,7 @@ Servo Values:
 void setServoPositions(int legNum, Vector3 angles, bool debug = false) {
   // This function sets the servo positions for the given leg object
 
-  angles = degrees(angles);
+  // angles = degrees(angles);
 
   // Serial.println("Angles: " + angles.toString() + "\n\n");
 
@@ -290,12 +291,10 @@ void setup() {
   Serial.println("");
 
   delay(10);
-
   digitalWrite(19, HIGH);
+  digitalWrite(19, LOW);
 
   initGait(); // Initialize the gait mode for the first leg
-
-  pcaDriver.setPWM(2, 0, fastMap(x, 0, 180, SERVOMIN, SERVOMAX));
 }
 
 // --- Added for pin 19 toggle logic ---
@@ -324,7 +323,7 @@ void loop() {
   delay(1);
 
   if (PS4.isConnected()) {
-    loopGait();
+    // loopGait();
   }
 
   // pcaDriver.setPWM(
@@ -337,6 +336,30 @@ void loop() {
   //     2, 0, float(fastMap(ctrl.rightStick.y, -127, 127, SERVOMIN,
   //     SERVOMAX)));
   // ------------------------------------
+
+  setServoPositions(4, Vector3(0, 101, 55)); // Calibration values for legs
+  /*
+  Servo Values:
+- Femur IRL
+  Max: 120°
+  Min: 0°
+  Cal: 101°
+
+- Femur IK
+  Max: -60°
+  Min: 65°
+  Cal: -45°
+
+- Tibia IRL
+  Max: 0°
+  Min: 180°
+  Cal: 55°
+
+- Tibia IK
+  Max: 195°
+  Min: 30°
+  Cal: 255°
+*/
 }
 
 void initGait() {
@@ -393,7 +416,7 @@ void loopGait() {
 
   legs[0].footPosition = getGaitCycle(gait, legs[0]);
   // Serial.println(
-  //     inverseKinematics(legs[0].legOrigin, legs[4].coxaAngle,
+  //     inverseKinematics(legs[0].legOrigin,
   //     legs[0].footPosition).toString());
   // Serial.println(legs[0].footPosition.toString());
 
@@ -410,8 +433,8 @@ void loopGait() {
   }
 
   legs[4].footPosition = getGaitCycle(gait, legs[4]);
-  setServoPositions(4, inverseKinematics(legs[4].legOrigin, legs[4].coxaAngle,
-                                         legs[4].footPosition));
+  setServoPositions(4,
+                    inverseKinematics(legs[4].legOrigin, legs[4].footPosition));
 }
 
 void restGait() {}
@@ -630,7 +653,7 @@ Vector3 getGaitCycle(const Gait &gait,
 }
 
 void moveToPos(Legtype leg, Vector3 pos) {
-  Vector3 angles = inverseKinematics(leg.legOrigin, legs[4].coxaAngle, pos);
+  Vector3 angles = inverseKinematics(leg.legOrigin, pos);
   setServoPositions(leg.legNumber, angles, true);
 }
 
@@ -641,58 +664,58 @@ void displayWalk(float increment) {
     flip = test >= 1 ? false : true;
     setServoPositions(
         0, inverseKinematics(
-               legs[0].legOrigin, legs[0].coxaAngle,
+               legs[0].legOrigin,
                Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
 
     setServoPositions(
         2, inverseKinematics(
-               legs[2].legOrigin, legs[2].coxaAngle,
+               legs[2].legOrigin,
                Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
 
     setServoPositions(
         4, inverseKinematics(
-               legs[4].legOrigin, legs[4].coxaAngle,
+               legs[4].legOrigin,
                Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
 
     setServoPositions(
-        1, inverseKinematics(legs[1].legOrigin, legs[1].coxaAngle,
+        1, inverseKinematics(legs[1].legOrigin,
                              GetPointOnBezierCurve(vectPointsA, test)));
 
     setServoPositions(
-        3, inverseKinematics(legs[3].legOrigin, legs[3].coxaAngle,
+        3, inverseKinematics(legs[3].legOrigin,
                              GetPointOnBezierCurve(vectPointsB, test)));
 
     setServoPositions(
-        5, inverseKinematics(legs[5].legOrigin, legs[5].coxaAngle,
+        5, inverseKinematics(legs[5].legOrigin,
                              GetPointOnBezierCurve(vectPointsB, test)));
   } else {
     test -= increment;
     flip = test <= 0 ? true : false;
     setServoPositions(
         1, inverseKinematics(
-               legs[1].legOrigin, legs[1].coxaAngle,
+               legs[1].legOrigin,
                Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
 
     setServoPositions(
         3, inverseKinematics(
-               legs[3].legOrigin, legs[3].coxaAngle,
+               legs[3].legOrigin,
                Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
 
     setServoPositions(
         5, inverseKinematics(
-               legs[5].legOrigin, legs[5].coxaAngle,
+               legs[5].legOrigin,
                Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
 
     setServoPositions(
-        0, inverseKinematics(legs[0].legOrigin, legs[0].coxaAngle,
+        0, inverseKinematics(legs[0].legOrigin,
                              GetPointOnBezierCurve(vectPointsA, test)));
 
     setServoPositions(
-        2, inverseKinematics(legs[2].legOrigin, legs[2].coxaAngle,
+        2, inverseKinematics(legs[2].legOrigin,
                              GetPointOnBezierCurve(vectPointsA, test)));
 
     setServoPositions(
-        4, inverseKinematics(legs[4].legOrigin, legs[4].coxaAngle,
+        4, inverseKinematics(legs[4].legOrigin,
                              GetPointOnBezierCurve(vectPointsB, test)));
   }
 }
@@ -705,14 +728,28 @@ void displayIK(float increment) {
     flip = test >= 1 ? false : true;
     setServoPositions(
         4, inverseKinematics(
-               legs[4].legOrigin, legs[4].coxaAngle,
+               legs[4].legOrigin,
                Vector3(200, -100, 0).lerp(Vector3(200, 100, 0), test)));
   } else {
     test -= increment;
     flip = test <= 0 ? true : false;
     setServoPositions(
         4, inverseKinematics(
-               legs[4].legOrigin, legs[4].coxaAngle,
+               legs[4].legOrigin,
                Vector3(200, 100, 0).lerp(Vector3(200, -100, 0), 1 - test)));
+  }
+}
+
+void demoStand(int stepCount) {
+  float zHeight = 0;
+
+  if (stepCount < 500) {
+    zHeight = map(stepCount, 0, 500, 0, -100);
+    for (int i = 0; i < NUM_LEGS; i++) {
+      setServoPositions(i,
+                        inverseKinematics(legs[i].legOrigin,
+                                          Vector3(gaitOrigins[i].x,
+                                                  gaitOrigins[i].y, zHeight)));
+    }
   }
 }
