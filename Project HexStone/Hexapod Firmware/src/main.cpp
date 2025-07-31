@@ -6,6 +6,14 @@
 #include <Wire.h>
 #include <math.h>
 
+/****************************** Configuration  ******************************/
+
+bool debug = false;    // Debug flag
+bool doSerial = false; // Serial flag for debugging
+bool waitForController =
+    false;            // Wait for controller to connect before enabling servos
+bool demoMode = true; // Demo mode flag to run a demo sequence
+
 /****************** Movement-Specific Global Declarations  ******************/
 
 // The amount of position updates for a complete cycle
@@ -88,23 +96,56 @@ float joy2CurrentMagnitude;
 // lifts off the ground
 Vector2 legLiftClearanceVect = Vector2(25, 25);
 
+// Assembly Position of All Legs
+const Vector3 assemblyPosition = radians(Vector3(0, 101, 55));
+
+// -63.09341 X
+// -90.10672 Y
+
+// Assembly position in coordinates
+const Vector3 assemblyPositionCoords[6] = {Vector3(-133.09341, 90.10672, -66),
+                                           Vector3(-210, 0, -66),
+                                           Vector3(-133.09341, -90.10672, -66),
+                                           Vector3(133.09341, -90.10672, -66),
+                                           Vector3(110, 0, -66),
+                                           Vector3(133.09341, 90.10672, -66)};
+
+// Rest Position of All Legs
+const Vector3 restPosition = radians(Vector3(0, 118, 2));
+
+// Variables specific to Demo Mode
+unsigned long selectionDebounce = 5;
+unsigned long demoTimer = 0;
+bool demoIK = false;
+bool demoWalking = false;
+unsigned long currentMillis = 0;
+enum DemoModeSelection { packup, ikDemo, sit, stand, walk };
+int steps = 0;
+
+DemoModeSelection currentDemo = packup;
+
 float walkSpeed = 0.0075;
 
-// enum walkMode { staticWalk, dynamicWalk, debugWalk, displayWalk };
+// --- Servo toggle logic ---
+bool pin19State = true;
+unsigned long servoEnableDebounce = 5;
 
 void initGait();
 void standGait();
 void loopGait();
 void restGait();
 void demoStand(int stepCount);
+void calibrationMode();
 // Given the current gait and a leg, this will return a vector representing the
 // next position of the gait cycle
 Vector3 getGaitCycle(const Gait &gait, Legtype leg);
-void moveToPos(Legtype leg, Vector3 pos);
+// void moveToPos(Legtype leg, Vector3 pos);
 
 /*************************************************************************/
 
 Adafruit_PWMServoDriver pcaDriver = Adafruit_PWMServoDriver();
+
+gaitMode gait_mode; // Instance of gaitMode
 
 /*** TEMPERARY VARIABLE DECLARATION ***/
 float coxaLen = 45.0;    // Length of the coxa segment
@@ -116,15 +157,20 @@ String servoNames[3] = {"Coxa", "Femur", "Tibia"}; // Names for each servo
 const Vector2 legOrigins[6] = {                    // For testing!
     Vector2(-70, 85), Vector2(-100, 0), Vector2(-70, -85),
     Vector2(70, -85), Vector2(100, 0),  Vector2(70, 85)}; // Leg origins
-const Vector2 gaitOrigins[6] = {
-    Vector2(-200, 200), Vector2(-170, 0), Vector2(-150, -200),
-    Vector2(150, -200), Vector2(170, 0),  Vector2(150, 200)}; // Gait origins
-// const Vector2 legOrigins[6] = {
-//     Vector2(0, 0), Vector2(0, 0), Vector2(0, 0),
-//     Vector2(0, 0), Vector2(0, 0), Vector2(0, 0),
-// };
-// const Vector2 gaitOrigins[6] = {Vector2(150, 0)};
-bool debug = false; // Debug flag
+const Vector2 gaitOrigins[6] = {Vector2(-127.35764, 166.9152),
+                                Vector2(-200, 0),
+                                Vector2(-127.35764, -166.9152),
+                                Vector2(127.35764, -166.9152),
+                                Vector2(200, 0),
+                                Vector2(127.35764, 166.9152)}; // Gait origins
+
+const Vector3 standingPositions[6] = {
+    Vector3(-127.35764, 166.9152, -75),
+    Vector3(-200, 0, -75),
+    Vector3(-127.35764, -166.9152, -75),
+    Vector3(127.35764, -166.9152, -75),
+    Vector3(200, 0, -75),
+    Vector3(127.35764, 166.9152, -75)}; // Standing Positions
 
 Gait gait({0.0, 0.5, 0.0, 0.5, 0.0, 0.5}, // offsets
           0.5,                            // cycleRatio
@@ -135,17 +181,14 @@ Gait gait({0.0, 0.5, 0.0, 0.5, 0.0, 0.5}, // offsets
 
 float test = 0.0;
 bool flip = true;
-Vector3 testPos(270, 0, 0);
 
-vector<Vector3> vectPointsA = {Vector3(-200, 100, -50), Vector3(-200, 100, 0),
-                               Vector3(-200, 0, 100), Vector3(-200, -100, 0),
-                               Vector3(-200, -100, -50)};
+vector<Vector3> vectPointsA = {Vector3(0, 75, 0), Vector3(0, 75, 25),
+                               Vector3(0, 0, 75), Vector3(0, -75, 25),
+                               Vector3(0, -75, -75)};
 
 vector<Vector3> vectPointsB = {Vector3(200, 100, -50), Vector3(200, 100, 0),
                                Vector3(200, 0, 100), Vector3(200, -100, 0),
                                Vector3(200, -100, -50)};
-
-double x = 90.0;
 
 /**************************************/
 
@@ -176,6 +219,8 @@ double x = 90.0;
  |0 == 1    \\
              \\
 
+Assembly Coordinates: (110, 0, -60)
+
 Servo Values:
 - Femur IRL
   Max: 120°
@@ -185,7 +230,7 @@ Servo Values:
 - Femur IK
   Max: -60°
   Min: 65°
-  Cal: -45°
+  Cal: 105°
 
 - Tibia IRL
   Max: 0°
@@ -201,46 +246,38 @@ Servo Values:
 void setServoPositions(int legNum, Vector3 angles, bool debug = false) {
   // This function sets the servo positions for the given leg object
 
-  // angles = degrees(angles);
+  // Update the servo angles in the leg object
+  legs[legNum].coxaAngle = angles.x;
+  legs[legNum].femurAngle = angles.y;
+  legs[legNum].tibiaAngle = angles.z;
 
-  // Serial.println("Angles: " + angles.toString() + "\n\n");
+  angles = degrees(angles);
 
   if (!debug) {
-    if (legNum == 4) {
-      // pcaDriver.setPWM(
-      //     legNum * 3, 0,
-      //     fastMap(angles.x, 0, M_PI, SERVOMIN, SERVOMAX)); // Coxa
-      // pcaDriver.setPWM(
-      //     legNum * 3 + 1, 0,
-      //     fastMap(M_PI - angles.y, 0, M_PI, SERVOMIN, SERVOMAX)); //
-      //     Femur
-      // pcaDriver.setPWM(
-      //     legNum * 3 + 2, 0,
-      //     fastMap(angles.z, 0, M_PI, SERVOMIN, SERVOMAX)); // Tibia
+    if (legNum <= 4) {
 
       pcaDriver.setPWM(
-          0, 0,
+          legNum * 3 + 0, 0,
           constrain(fastMap(angles.x + 90, 0, 180, SERVOMIN, SERVOMAX),
                     SERVOMIN, SERVOMAX)); // Coxa
       pcaDriver.setPWM(
-          1, 0,
+          legNum * 3 + 1, 0,
           constrain(fastMap(angles.y - 4, 0, 180, SERVOMIN, SERVOMAX), SERVOMIN,
                     SERVOMAX)); // Femur
       pcaDriver.setPWM(
-          2, 0,
+          legNum * 3 + 2, 0,
           constrain(fastMap(angles.z + 20, 0, 180, SERVOMIN, SERVOMAX),
                     SERVOMIN, SERVOMAX)); // Tibia
     } else {
-      // For the last two servos, use analogWrite
-      // This is a workaround for the PCA9685 only having 16 channels
-      // *** This will need to be revisited after the IK has been fully
-      // implemented! ***
-      // pcaDriver.setPWM(legNum * 3, 0,
-      //                  fastMap(angles.x, 0, M_PI, SERVOMIN, SERVOMAX)); //
-      //                  Coxa
-      // analogWrite(SERVOPIN_16, fastMap(angles.x, 0, M_PI, 0, 255));     //
-      // Femur analogWrite(SERVOPIN_17, fastMap(angles.x, 0, M_PI, 0, 255)); //
-      // Tibia
+      // For the last two servos, use ESP32 LED PWM
+      pcaDriver.setPWM(
+          legNum * 3 + 0, 0,
+          constrain(fastMap(angles.x + 90, 0, 180, SERVOMIN, SERVOMAX),
+                    SERVOMIN, SERVOMAX)); // Coxa
+      ledcWrite(
+          0, constrain(fastMap(angles.y - 4, 0, 180, 0, 255), 0, 255)); // Femur
+      ledcWrite(1, constrain(fastMap(angles.z + 20, 0, 180, 0, 255), 0,
+                             255)); // Tibia
     }
   } else {
     angles.x = radToDeg(angles.x);
@@ -261,18 +298,28 @@ void setServoPositions(int legNum, Vector3 angles, bool debug = false) {
 }
 
 void setup() {
-  Serial.begin(115200);
-  while (!Serial) // Wait for serial port to initialize
-    ;
-  Serial.println("Single Leg Test");
+  if (doSerial) {
+    Serial.begin(115200);
+    while (!Serial) // Wait for serial port to initialize
+      ;
+    Serial.println("Single Leg Test");
+  }
+
   pcaDriver.begin();
   pcaDriver.setOscillatorFrequency(26000000);
   pcaDriver.setPWMFreq(SERVO_FREQ); // Analog servos run at ~50 Hz updates
-  pinMode(SERVOPIN_16, OUTPUT);     // Set the pin modes for the servos
-  pinMode(SERVOPIN_17, OUTPUT);
+  pinMode(LEG5FEMURPIN, OUTPUT);    // Set the pin modes for the last two servos
+  pinMode(LEG5TIBIAPIN, OUTPUT);
 
-  // --- Added for pin 4 toggle logic ---
-  pinMode(19, OUTPUT); // Set pin 4 as output with pulldown
+  // --- ESP32 LED PWM setup for last two servos ---
+  ledcSetup(0, 50, 8); // channel 0, 50Hz, 8-bit resolution
+  ledcAttachPin(LEG5FEMURPIN, 0);
+  ledcSetup(1, 50, 8); // channel 1, 50Hz, 8-bit resolution
+  ledcAttachPin(LEG5TIBIAPIN, 1);
+  // ----------------------------------------------
+
+  // --- PCA Driver output disable pin ---
+  pinMode(19, OUTPUT); // Set pin 19 as output with pulldown
   // ------------------------------------
 
   for (int i = 0; i < NUM_LEGS; i++) { // Construct the leg objects
@@ -282,84 +329,171 @@ void setup() {
     legs[i].footPosition = gaitOrigins[i];
   }
 
-  PS4.attachOnConnect(onConnect);
-  PS4.attachOnDisconnect(onDisConnect);
+  if (doSerial) {
+    PS4.attachOnConnect(onConnect);
+    PS4.attachOnDisconnect(onDisConnect);
+  }
+
   PS4.begin();
   removePairedDevices(); // This helps to solve connection issues
-  Serial.print("This device's MAC address is: ");
-  printDeviceAddress();
-  Serial.println("");
 
   delay(10);
-  digitalWrite(19, HIGH);
-  digitalWrite(19, LOW);
+
+  if (waitForController) {
+    digitalWrite(19, HIGH);
+  } else {
+    digitalWrite(19, LOW);
+  }
 
   initGait(); // Initialize the gait mode for the first leg
+
+  calibrationMode(); // Packup mode to reset all servos
+
+  currentMillis = millis(); // Initialize the currentMillis variable
 }
-
-// --- Added for pin 19 toggle logic ---
-bool pin19State = true;
-int debounceTime = 5;
-// ------------------------------------
-
-gaitMode gait_mode; // Instance of gaitMode
 
 void loop() {
   // --- Added for pin 19 toggle logic ---
   ControllerData ctrl = getJoystickData();
-  if (ctrl.buttonCross && debounceTime > 5) {
+  if (ctrl.buttonTouchpad && servoEnableDebounce > 5) {
     pin19State = !pin19State;
     digitalWrite(19, pin19State ? HIGH : LOW);
-    debounceTime = 0;
-  } else if (!ctrl.buttonCross) {
-    debounceTime++;
+    servoEnableDebounce = 0;
+  } else if (ctrl.buttonR1 && servoEnableDebounce > 5) {
+    setServoPositions(0, assemblyPosition);
+    setServoPositions(1, assemblyPosition);
+    setServoPositions(2, assemblyPosition);
+    setServoPositions(3, assemblyPosition);
+    setServoPositions(4, assemblyPosition);
+    setServoPositions(5, assemblyPosition);
+    while (!ctrl.buttonR1)
+      delay(50);
+    while (!getJoystickData().buttonL1) { // Pauses all functions
+      delay(100);
+    }
+    servoEnableDebounce = 0;
+  } else if (!ctrl.buttonTouchpad) {
+    servoEnableDebounce++;
   }
-  if (ctrl.buttonSquare) {
-    Serial.println("Press Triangle to exit");
-    while (!getJoystickData().buttonTriangle) {
+  if (ctrl.buttonOptions) {
+    if (doSerial)
+      Serial.println("Press Triangle to exit");
+    while (!ctrl.buttonOptions)
+      delay(50);
+    while (!getJoystickData().buttonOptions) { // Pauses all functions
       delay(100);
     }
   }
-  delay(1);
 
-  if (PS4.isConnected()) {
-    // loopGait();
+  // if (PS4.isConnected() && !demoMode) {
+  //   loopGait();
+  // } else if (PS4.isConnected() && demoMode) {
+  //   if (currentMillis > currentMillis + selectionDebounce) {
+  //     currentMillis = millis();
+  //     if (ctrl.buttonTriangle) {
+  //       currentDemo = stand;
+  //     } else if (ctrl.buttonCircle) {
+  //       currentDemo = ikDemo;
+  //     } else if (ctrl.buttonSquare) {
+  //       currentDemo = sit;
+  //     } else if (ctrl.buttonCross) {
+  //       currentDemo = walk;
+  //     } else if (ctrl.buttonShare) {
+  //       currentDemo = packup;
+  //     }
+  //   }
+
+  // if (currentDemo == packup) {
+  //   restMode();
+  // }
+
+  // if (ctrl.buttonCross && millis() > demoTimer + 100) {
+  //   demoTimer = millis();
+  //   demoWalking = !demoWalking;
+  // }
+
+  if (demoIK) {
+    steps += 0.1;
+    if (steps >= 6500) {
+      steps = 0;
+    }
+    ikDemoMode(steps);
   }
 
-  // pcaDriver.setPWM(
-  //     0, 0, float(fastMap(ctrl.leftStick.x, -127, 127, SERVOMIN,
-  //     SERVOMAX)));
-  // pcaDriver.setPWM(
-  //     1, 0, float(fastMap(ctrl.leftStick.y, -127, 127, SERVOMIN,
-  //     SERVOMAX)));
-  // pcaDriver.setPWM(
-  //     2, 0, float(fastMap(ctrl.rightStick.y, -127, 127, SERVOMIN,
-  //     SERVOMAX)));
-  // ------------------------------------
+  if (demoWalking) {
+    steps += 0.1;
+    if (steps >= 6500) {
+      steps = 0;
+    }
+    demoWalkingMode(steps);
+  }
 
-  setServoPositions(4, Vector3(0, 101, 55)); // Calibration values for legs
-  /*
-  Servo Values:
-- Femur IRL
-  Max: 120°
-  Min: 0°
-  Cal: 101°
+  // if (flip) {
+  //   test += walkSpeed;
+  //   flip = test >= 1 ? false : true;
+  //   setServoPositions(
+  //       0, inverseKinematics(
+  //              legs[0].legOrigin,
+  //              Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50),
+  //              test)));
 
-- Femur IK
-  Max: -60°
-  Min: 65°
-  Cal: -45°
+  //   setServoPositions(
+  //       2, inverseKinematics(
+  //              legs[2].legOrigin,
+  //              Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50),
+  //              test)));
 
-- Tibia IRL
-  Max: 0°
-  Min: 180°
-  Cal: 55°
+  //   setServoPositions(
+  //       4, inverseKinematics(
+  //              legs[4].legOrigin,
+  //              Vector3(200, 100, -50).lerp(Vector3(200, -100, -50),
+  //              test)));
 
-- Tibia IK
-  Max: 195°
-  Min: 30°
-  Cal: 255°
-*/
+  //   setServoPositions(
+  //       1, inverseKinematics(legs[1].legOrigin,
+  //                            GetPointOnBezierCurve(vectPointsA, test)));
+
+  //   setServoPositions(
+  //       3, inverseKinematics(legs[3].legOrigin,
+  //                            GetPointOnBezierCurve(vectPointsB, test)));
+
+  //   setServoPositions(
+  //       5, inverseKinematics(legs[5].legOrigin,
+  //                            GetPointOnBezierCurve(vectPointsB, test)));
+  // } else {
+  //   test -= walkSpeed;
+  //   flip = test <= 0 ? true : false;
+  //   setServoPositions(
+  //       1, inverseKinematics(
+  //              legs[1].legOrigin,
+  //              Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50),
+  //              test)));
+
+  //   setServoPositions(
+  //       3, inverseKinematics(
+  //              legs[3].legOrigin,
+  //              Vector3(200, 100, -50).lerp(Vector3(200, -100, -50),
+  //              test)));
+
+  //   setServoPositions(
+  //       5, inverseKinematics(
+  //              legs[5].legOrigin,
+  //              Vector3(200, 100, -50).lerp(Vector3(200, -100, -50),
+  //              test)));
+
+  //   setServoPositions(
+  //       0, inverseKinematics(legs[0].legOrigin,
+  //                            GetPointOnBezierCurve(vectPointsA, test)));
+
+  //   setServoPositions(
+  //       2, inverseKinematics(legs[2].legOrigin,
+  //                            GetPointOnBezierCurve(vectPointsA, test)));
+
+  //   setServoPositions(
+  //       4, inverseKinematics(legs[4].legOrigin,
+  //                            GetPointOnBezierCurve(vectPointsB, test)));
+  // }
+  // }
 }
 
 void initGait() {
@@ -652,91 +786,205 @@ Vector3 getGaitCycle(const Gait &gait,
   }
 }
 
-void moveToPos(Legtype leg, Vector3 pos) {
-  Vector3 angles = inverseKinematics(leg.legOrigin, pos);
-  setServoPositions(leg.legNumber, angles, true);
-}
+// void moveToPos(Legtype leg, Vector3 pos) {
+//   Vector3 angles = inverseKinematics(leg.legOrigin, pos);
+//   setServoPositions(leg.legNumber, angles, true);
+// }
 
-void displayWalk(float increment) {
+// const Vector2 gaitOrigins[6] = {Vector2(-127.35764, 166.9152),
+//                                 Vector2(-200, 0),
+//                                 Vector2(-127.35764, -166.9152),
+//                                 Vector2(127.35764, -166.9152),
+//                                 Vector2(200, 0),
+//                                 Vector2(127.35764, 166.9152)}; // Gait
+//                                 origins
+// }
+
+int stepLength = 75;
+
+void demoWalkingMode(float increment) {
+  flip = increment >= 1000 ? false : true;
 
   if (flip) {
-    test += increment;
-    flip = test >= 1 ? false : true;
+    float t = fastMap(increment, 0, 1000, 0, 1);
     setServoPositions(
         0, inverseKinematics(
                legs[0].legOrigin,
-               Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
+               Vector3(-127.35764, 166.9152 + stepLength, -50)
+                   .lerp(Vector3(-127.35764, 166.9152 - stepLength, -50), t)));
 
     setServoPositions(
         2, inverseKinematics(
                legs[2].legOrigin,
-               Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
+               Vector3(-127.35764, -166.9152 + stepLength, -50)
+                   .lerp(Vector3(-127.35764, -166.9152 - stepLength, -50), t)));
 
     setServoPositions(
         4, inverseKinematics(
                legs[4].legOrigin,
-               Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
+               Vector3(200, 75, -50).lerp(Vector3(200, -75, -50), t)));
 
-    setServoPositions(
-        1, inverseKinematics(legs[1].legOrigin,
-                             GetPointOnBezierCurve(vectPointsA, test)));
+    setServoPositions(1,
+                      inverseKinematics(legs[1].legOrigin,
+                                        GetPointOnBezierCurve(vectPointsA, t)));
 
-    setServoPositions(
-        3, inverseKinematics(legs[3].legOrigin,
-                             GetPointOnBezierCurve(vectPointsB, test)));
+    setServoPositions(3,
+                      inverseKinematics(legs[3].legOrigin,
+                                        GetPointOnBezierCurve(vectPointsB, t)));
 
-    setServoPositions(
-        5, inverseKinematics(legs[5].legOrigin,
-                             GetPointOnBezierCurve(vectPointsB, test)));
+    setServoPositions(5,
+                      inverseKinematics(legs[5].legOrigin,
+                                        GetPointOnBezierCurve(vectPointsB, t)));
   } else {
-    test -= increment;
-    flip = test <= 0 ? true : false;
+    float t = fastMap(increment, 1000, 2000, 0, 1);
     setServoPositions(
         1, inverseKinematics(
                legs[1].legOrigin,
-               Vector3(-200, 100, -50).lerp(Vector3(-200, -100, -50), test)));
+               Vector3(-200, 75, -50).lerp(Vector3(-200, -75, -50), t)));
 
     setServoPositions(
-        3, inverseKinematics(
-               legs[3].legOrigin,
-               Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
+        3,
+        inverseKinematics(legs[3].legOrigin,
+                          Vector3(127.35764, -166.9152 + stepLength, -50)
+                              .lerp(Vector3(170, -160 - stepLength, -50), t)));
 
     setServoPositions(
         5, inverseKinematics(
                legs[5].legOrigin,
-               Vector3(200, 100, -50).lerp(Vector3(200, -100, -50), test)));
+               Vector3(127.35764, 166.9152 + stepLength, -50)
+                   .lerp(Vector3(127.35764, 166.9152 - stepLength, -50), t)));
 
-    setServoPositions(
-        0, inverseKinematics(legs[0].legOrigin,
-                             GetPointOnBezierCurve(vectPointsA, test)));
+    getAdjustedBezierPoints(0);
 
-    setServoPositions(
-        2, inverseKinematics(legs[2].legOrigin,
-                             GetPointOnBezierCurve(vectPointsA, test)));
+    setServoPositions(0,
+                      inverseKinematics(legs[0].legOrigin,
+                                        GetPointOnBezierCurve(vectPointsA, t)));
 
-    setServoPositions(
-        4, inverseKinematics(legs[4].legOrigin,
-                             GetPointOnBezierCurve(vectPointsB, test)));
+    setServoPositions(2,
+                      inverseKinematics(legs[2].legOrigin,
+                                        GetPointOnBezierCurve(vectPointsA, t)));
+
+    setServoPositions(4,
+                      inverseKinematics(legs[4].legOrigin,
+                                        GetPointOnBezierCurve(vectPointsB, t)));
   }
 }
 
-void displayIK(float increment) {
-  Serial.println("Displayng IK Example");
+vector<Vector3> getAdjustedBezierPoints(int index) {
+  for (int i = 0; i < vectPointsA.size(); i++) {
+    vectPointsA[i] = vectPointsA[i] + standingPositions[index];
+  }
+  return vectPointsA;
+}
 
-  if (flip) {
-    test += increment;
-    flip = test >= 1 ? false : true;
-    setServoPositions(
-        4, inverseKinematics(
-               legs[4].legOrigin,
-               Vector3(200, -100, 0).lerp(Vector3(200, 100, 0), test)));
-  } else {
-    test -= increment;
-    flip = test <= 0 ? true : false;
-    setServoPositions(
-        4, inverseKinematics(
-               legs[4].legOrigin,
-               Vector3(200, 100, 0).lerp(Vector3(200, -100, 0), 1 - test)));
+void calibrationMode() {
+  for (int i = 0; i < NUM_LEGS; i++) {
+    setServoPositions(i,
+                      assemblyPosition); // Set all servos to assembly position
+    delay(1000);
+  }
+}
+
+void restMode() {
+  for (int i = 0; i < NUM_LEGS; i++) {
+    setServoPositions(i, restPosition);
+    delay(1000);
+  }
+}
+
+void ikDemoMode(float stepCount) {
+
+  for (int i = 0; i < NUM_LEGS; i++) {
+    if (stepCount <= 500) {
+      float t = fastMap(stepCount, 0, 500, 0, 1);
+      setServoPositions(
+          i, inverseKinematics(legs[i].legOrigin,
+                               Vector3(gaitOrigins[i].x, gaitOrigins[i].y, -50)
+                                   .lerp(Vector3(gaitOrigins[i].x,
+                                                 gaitOrigins[i].y - 100, -50),
+                                         t)));
+    } else if (stepCount > 500 && stepCount <= 1500) {
+      float t = fastMap(stepCount, 501, 1500, 0, 1);
+      setServoPositions(
+          i,
+          inverseKinematics(
+              legs[i].legOrigin,
+              Vector3(gaitOrigins[i].x, gaitOrigins[i].y - 100, -50)
+                  .lerp(Vector3(gaitOrigins[i].x, gaitOrigins[i].y + 100, -50),
+                        t)));
+
+    } else if (stepCount > 1500 && stepCount <= 2000) {
+      float t = fastMap(stepCount, 1501, 2000, 0, 1);
+      setServoPositions(
+          i,
+          inverseKinematics(
+              legs[i].legOrigin,
+              Vector3(gaitOrigins[i].x, gaitOrigins[i].y + 100, -50)
+                  .lerp(Vector3(gaitOrigins[i].x, gaitOrigins[i].y, -50), t)));
+
+    } else if (stepCount > 2000 && stepCount <= 2500) {
+      float t = fastMap(stepCount, 2001, 2500, 0, 1);
+      setServoPositions(
+          i, inverseKinematics(legs[i].legOrigin,
+                               Vector3(gaitOrigins[i].x, gaitOrigins[i].y, -50)
+                                   .lerp(Vector3(gaitOrigins[i].x - 75,
+                                                 gaitOrigins[i].y, -50),
+                                         t)));
+    } else if (stepCount > 2500 && stepCount <= 3500) {
+      float t = fastMap(stepCount, 2501, 3500, 0, 1);
+      setServoPositions(
+          i,
+          inverseKinematics(
+              legs[i].legOrigin,
+              Vector3(gaitOrigins[i].x - 75, gaitOrigins[i].y, -50)
+                  .lerp(Vector3(gaitOrigins[i].x + 75, gaitOrigins[i].y, -50),
+                        t)));
+    } else if (stepCount > 3500 && stepCount <= 4000) {
+      float t = fastMap(stepCount, 3500, 4000, 0, 1);
+      setServoPositions(
+          i,
+          inverseKinematics(
+              legs[i].legOrigin,
+              Vector3(gaitOrigins[i].x + 75, gaitOrigins[i].y, -50)
+                  .lerp(Vector3(gaitOrigins[i].x, gaitOrigins[i].y, -50), t)));
+    } else if (stepCount > 4000 && stepCount <= 4500) {
+      float t = fastMap(stepCount, 4000, 4500, 0, 1);
+      setServoPositions(
+          i,
+          inverseKinematics(
+              legs[i].legOrigin,
+              Vector3(gaitOrigins[i].x, gaitOrigins[i].y, -50)
+                  .lerp(Vector3(gaitOrigins[i].x, gaitOrigins[i].y, -100), t)));
+    } else if (stepCount > 4500 && stepCount <= 5000) {
+      float t = fastMap(stepCount, 4500, 5000, 0, 1);
+      setServoPositions(
+          i, inverseKinematics(
+                 legs[i].legOrigin,
+                 Vector3(gaitOrigins[i].x, gaitOrigins[i].y, -100)
+                     .lerp(Vector3(gaitOrigins[i].x, gaitOrigins[i].y, 0), t)));
+    } else if (stepCount > 5000 && stepCount <= 6000) {
+      float t = fastMap(stepCount, 5000, 6000, 0, 1);
+      setServoPositions(
+          i, inverseKinematics(
+                 legs[i].legOrigin,
+                 Vector3(gaitOrigins[i].x, gaitOrigins[i].y, -100)
+                     .lerp(Vector3(gaitOrigins[i].x, gaitOrigins[i].y, 0), t)));
+    } else if (stepCount > 5000 && stepCount <= 6000) {
+      float t = fastMap(stepCount, 5000, 6000, 0, 1);
+      setServoPositions(
+          i, inverseKinematics(
+                 legs[i].legOrigin,
+                 Vector3(gaitOrigins[i].x, gaitOrigins[i].y, -100)
+                     .lerp(Vector3(gaitOrigins[i].x, gaitOrigins[i].y, 0), t)));
+    } else if (stepCount > 6000 && stepCount <= 6500) {
+      float t = fastMap(stepCount, 6000, 6500, 0, 1);
+      setServoPositions(
+          i,
+          inverseKinematics(
+              legs[i].legOrigin,
+              Vector3(gaitOrigins[i].x, gaitOrigins[i].y, 0)
+                  .lerp(Vector3(gaitOrigins[i].x, gaitOrigins[i].y, -50), t)));
+    }
   }
 }
 
@@ -750,6 +998,12 @@ void demoStand(int stepCount) {
                         inverseKinematics(legs[i].legOrigin,
                                           Vector3(gaitOrigins[i].x,
                                                   gaitOrigins[i].y, zHeight)));
+    }
+  } else {
+    for (int i = 0; i < NUM_LEGS; i++) {
+      setServoPositions(i, inverseKinematics(legs[i].legOrigin,
+                                             Vector3(gaitOrigins[i].x,
+                                                     gaitOrigins[i].y, -100)));
     }
   }
 }

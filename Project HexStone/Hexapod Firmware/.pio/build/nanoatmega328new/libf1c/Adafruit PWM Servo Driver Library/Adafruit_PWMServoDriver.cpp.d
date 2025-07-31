@@ -1,5 +1,6 @@
-.pio/build/nanoatmega328new/libb7f/Adafruit\ BusIO/Adafruit_I2CDevice.cpp.o: \
- .pio/libdeps/nanoatmega328new/Adafruit\ BusIO/Adafruit_I2CDevice.cpp \
+.pio/build/nanoatmega328new/libf1c/Adafruit\ PWM\ Servo\ Driver\ Library/Adafruit_PWMServoDriver.cpp.o: \
+ .pio/libdeps/nanoatmega328new/Adafruit\ PWM\ Servo\ Driver\ Library/Adafruit_PWMServoDriver.cpp \
+ .pio/libdeps/nanoatmega328new/Adafruit\ PWM\ Servo\ Driver\ Library/Adafruit_PWMServoDriver.h \
  .pio/libdeps/nanoatmega328new/Adafruit\ BusIO/Adafruit_I2CDevice.h \
  C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
  C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp_arduino_version.h \

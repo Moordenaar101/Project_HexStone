@@ -1,4 +1,4 @@
-.pio/build/nanoatmega328new/libb7f/Adafruit\ BusIO/Adafruit_SPIDevice.cpp.o: \
+.pio/build/nanoatmega328new/lib330/Adafruit\ BusIO/Adafruit_SPIDevice.cpp.o: \
  .pio/libdeps/nanoatmega328new/Adafruit\ BusIO/Adafruit_SPIDevice.cpp \
  .pio/libdeps/nanoatmega328new/Adafruit\ BusIO/Adafruit_SPIDevice.h \
  C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \

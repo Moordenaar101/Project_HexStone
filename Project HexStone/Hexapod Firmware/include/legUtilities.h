@@ -16,8 +16,8 @@
 
 // Because the PCA9685 only has 16 channels (Servo# 0-15), These pins are the
 // remaining 2 servos that will be directly connected to the µC
-#define SERVOPIN_16 16
-#define SERVOPIN_17 17
+#define LEG5FEMURPIN 33
+#define LEG5TIBIAPIN 32
 
 // Single Gait struct definition
 struct Gait {

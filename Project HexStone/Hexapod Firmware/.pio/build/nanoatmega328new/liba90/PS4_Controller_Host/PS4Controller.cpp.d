@@ -1,4 +1,4 @@
-.pio/build/nanoatmega328new/libb16/PS4_Controller_Host/PS4Controller.cpp.o: \
+.pio/build/nanoatmega328new/liba90/PS4_Controller_Host/PS4Controller.cpp.o: \
  .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/PS4Controller.cpp \
  .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/PS4Controller.h \
  C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
