@@ -67,10 +67,7 @@ struct Legtype { // Servo angles are from -90° → 90°
   float femurAngle;
   float tibiaAngle;
   int legNumber;
-  Vector2 gaitOrigin;
-  Vector2 legOrigin;
   Vector3 footPosition; // Current position of the foot in 3D space
-  bool isGrounded;      // Whether the foot is currently on the ground
 
   Legtype();
   Legtype &operator=(const Legtype &other);
@@ -85,3 +82,8 @@ float fastMap(float x, float in_min, float in_max, float out_min,
 
 Vector3 GetPointOnBezierCurve(vector<Vector3> &controlPoints, float t);
 int binomialCoefficient(int n, int k);
+
+inline std::vector<Vector3> operator+(const std::vector<Vector3> &arr,
+                                      const Vector3 &v);
+
+std::vector<Vector3> getOffsetBezierPoints(const int index);

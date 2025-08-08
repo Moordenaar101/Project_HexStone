@@ -134,10 +134,10 @@
  C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/esp_hw_support/include/soc/esp32/spiram.h \
  C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/cores/esp32/io_pin_remap.h \
  C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
+ include/controller.h \
+ .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/PS4Controller.h \
+ .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/ps4.h \
  .pio/libdeps/nanoatmega328new/Adafruit\ PWM\ Servo\ Driver\ Library/Adafruit_PWMServoDriver.h \
  .pio/libdeps/nanoatmega328new/Adafruit\ BusIO/Adafruit_I2CDevice.h \
  C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src/Wire.h \
- C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal.h \
- include/controller.h \
- .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/PS4Controller.h \
- .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/ps4.h
+ C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal.h

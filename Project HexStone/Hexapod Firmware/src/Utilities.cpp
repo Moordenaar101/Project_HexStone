@@ -1,6 +1,19 @@
 #include "Utilities.h"
 #include <Arduino.h>
 #include <math.h>
+#include <vector>
+
+extern std::vector<Vector3> demoWalkOffset;
+extern const Vector3 standingPositions[6];
+extern int NUM_LEGS;
+std::vector<Vector3> getOffsetBezierPoints(const int index) {
+  std::vector<Vector3> offsetPoints;
+  offsetPoints.reserve(demoWalkOffset.size());
+  for (int i = 0; i < NUM_LEGS; i++) {
+    offsetPoints.push_back(demoWalkOffset[i] + standingPositions[index]);
+  }
+  return offsetPoints;
+}
 
 // ===================== Vector2 Implementation =====================
 
@@ -144,8 +157,7 @@ Vector3 Vector3::rotate(float angle, Vector2 pivot) {
 // ===================== Legtype Implementation =====================
 
 Legtype::Legtype()
-    : coxaAngle(0), femurAngle(0), tibiaAngle(0), legNumber(), gaitOrigin(),
-      legOrigin(0, 0), footPosition(), isGrounded(true) {}
+    : coxaAngle(0), femurAngle(0), tibiaAngle(0), legNumber(), footPosition() {}
 
 Legtype &Legtype::operator=(const Legtype &other) {
   if (this != &other) {
@@ -153,10 +165,7 @@ Legtype &Legtype::operator=(const Legtype &other) {
     femurAngle = other.femurAngle;
     tibiaAngle = other.tibiaAngle;
     legNumber = other.legNumber;
-    gaitOrigin = other.gaitOrigin;
-    legOrigin = other.legOrigin;
     footPosition = other.footPosition;
-    isGrounded = other.isGrounded;
   }
   return *this;
 }
@@ -199,5 +208,15 @@ int binomialCoefficient(int n, int k) {
     result /= i;
   }
 
+  return result;
+}
+
+inline std::vector<Vector3> operator+(const std::vector<Vector3> &arr,
+                                      const Vector3 &v) {
+  std::vector<Vector3> result;
+  result.reserve(arr.size());
+  for (const auto &elem : arr) {
+    result.push_back(elem + v);
+  }
   return result;
 }

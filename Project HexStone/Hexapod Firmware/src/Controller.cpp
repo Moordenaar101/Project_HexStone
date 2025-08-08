@@ -7,7 +7,8 @@
 #include <Arduino.h>
 #include <PS4Controller.h>
 
-unsigned long lastTimeStamp = 0;
+// Deadzone for joystick input
+int deadZone = 10;
 
 ControllerData getJoystickData() {
   ControllerData data;
@@ -82,3 +83,14 @@ void printDeviceAddress() {
 void onConnect() { Serial.println("Controller Connected!"); }
 
 void onDisConnect() { Serial.println("Controller Disconnected!"); }
+
+bool inputDetected() {
+  bool input = false;
+  ControllerData data = getJoystickData();
+
+  if (abs(data.leftStick.x) > deadZone || abs(data.leftStick.y) > deadZone ||
+      abs(data.rightStick.y) > deadZone) {
+    input = true;
+  }
+  return input;
+}

@@ -43,3 +43,4 @@ void printDeviceAddress();
 void onConnect();
 void notify();
 void onDisConnect();
+bool inputDetected();
