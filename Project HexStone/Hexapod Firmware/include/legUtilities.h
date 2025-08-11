@@ -68,6 +68,7 @@ enum LegState { Propelling, Lifting, Standing, Reset };
 Vector3 inverseKinematics(const Vector3 &goal);
 
 void setServoPositions(int legNum, Vector3 angles);
+void assemblyModeDelay();
 void assemblyMode();
 void packupMode();
 void sitMode(int stepCount);

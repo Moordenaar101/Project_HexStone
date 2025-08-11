@@ -6,7 +6,7 @@
 #include <math.h>
 
 // Servo Offsets
-const float coxaOffset = 0;
+const float coxaOffset = 90;
 const float femurOffset = 0;
 const float tibiaOffset = 0;
 
@@ -15,12 +15,21 @@ Vector3 errorVector = Vector3(0, 60, 50);
 
 Vector3 inverseKinematics(const Vector3 &goal) {
 
-  float goalDistance = Vector3(0, 0, 0).distanceTo(
-      goal + Vector3(gaitOrigin.x, gaitOrigin.y, chassisHeight));
-  if (goalDistance > coxaLen + femurLen + tibiaLen) {
-    Serial.println("Position out of reach!");
-    return errorVector;
-  }
+  // float goalDistance = Vector3(0, 0, 0).distanceTo(
+  //     goal + Vector3(gaitOrigin.x, gaitOrigin.y, chassisHeight));
+  // if (goalDistance > coxaLen + femurLen + tibiaLen) {
+  //   Serial.println("Position out of reach!");
+  //   // Serial.println(goal.distanceTo(Vector3()));
+  //   // Serial.println((goal.lerp(Vector3(), (goal.distanceTo(Vector3()) /
+  //   //                                       (coxaLen + femurLen + tibiaLen))
+  //   -
+  //   //                                          0.95))
+  //   //                    .distanceTo(Vector3()));
+  //   return goal.lerp(
+  //       Vector3(),
+  //       (goal.distanceTo(Vector3()) / (coxaLen + femurLen + tibiaLen)) -
+  //       0.95);
+  // }
 
   const float x = goal.x + gaitOrigin.x;
   const float y = goal.y + gaitOrigin.y;
@@ -45,7 +54,7 @@ Vector3 inverseKinematics(const Vector3 &goal) {
 
   Vector3 angles;
 
-  angles.x = theta1 + coxaOffset + 90;   // Coxa
+  angles.x = theta1 + coxaOffset;        // Coxa
   angles.y = theta2 + femurOffset;       // Femur
   angles.z = 180 - theta3 + tibiaOffset; // Tibia
 
@@ -61,22 +70,21 @@ void setServoPositions(int legNum, Vector3 angles) {
   legs[legNum].femurAngle = angles.y;
   legs[legNum].tibiaAngle = angles.z;
 
-  // Serial.println("Angles:" + angles.toString());
+  // Serial.println("Leg " + String(legNum) + " Angles:" + angles.toString());
 
-  if (legNum <= 4) { // 4
+  if (legNum <= 4) {
     pcaDriver.setPWM(legNum * 3 + 0, 0,
                      constrain(fastMap(angles.x, 0, 180, SERVOMIN, SERVOMAX),
-                               SERVOMIN,   // +90
+                               SERVOMIN,
                                SERVOMAX)); // Coxa
     pcaDriver.setPWM(legNum * 3 + 1, 0,
                      constrain(fastMap(angles.y, 0, 180, SERVOMIN, SERVOMAX),
-                               SERVOMIN,   // -4
+                               SERVOMIN,
                                SERVOMAX)); // Femur
-    pcaDriver.setPWM(
-        legNum * 3 + 2, 0,
-        constrain(fastMap(angles.z, 0, 180, SERVOMIN, SERVOMAX), // +20
-                  SERVOMIN, SERVOMAX));                          // Tibia
-  } else {
+    pcaDriver.setPWM(legNum * 3 + 2, 0,
+                     constrain(fastMap(angles.z, 0, 180, SERVOMIN, SERVOMAX),
+                               SERVOMIN, SERVOMAX)); // Tibia
+  } else if (legNum == 5) {
     // For the last two servos, use ESP32 LED PWM
     pcaDriver.setPWM(legNum * 3 + 0, 0,
                      constrain(fastMap(angles.x, 0, 180, SERVOMIN, SERVOMAX),
@@ -90,10 +98,16 @@ void setServoPositions(int legNum, Vector3 angles) {
   }
 }
 
-void assemblyMode() {
+void assemblyModeDelay() {
   for (int i = 0; i < NUM_LEGS; i++) {
     setServoPositions(i, assemblyPosition);
     delay(250);
+  }
+}
+
+void assemblyMode() {
+  for (int i = 0; i < NUM_LEGS; i++) {
+    setServoPositions(i, assemblyPosition);
   }
 }
 
@@ -120,8 +134,8 @@ void sitMode(int stepCount) {
 
 void standMode(int stepCount) {
   float zHeight;
-  if (stepCount < 500) {
-    zHeight = map(stepCount, 0, 500, 0, chassisHeight);
+  if (stepCount < 1000) {
+    zHeight = map(stepCount, 0, 1000, 0, chassisHeight);
     for (int i = 0; i < NUM_LEGS; i++) {
       setServoPositions(i, inverseKinematics(Vector3(0, 0, zHeight)));
     }
@@ -318,36 +332,10 @@ void walkGait(ControllerData controlData, Gait currentGait) {
   joy2TargetVector.x = fastMap(controlData.rightStick.x, -127, 127, -100, 100);
   joy2TargetVector.y = fastMap(controlData.rightStick.y, -127, 127, -100, 100);
 
-  // if (controlData.leftStick.x > 8 || controlData.leftStick.x < -8) {
-  //   joy1TargetVector.x = fastMap(controlData.leftStick.x, -127, 127, -100,
-  //   100); move = true;
-  // } else {
-  //   joy1TargetVector.x = 0;
-  //   move = false;
-  // }
-  // if (controlData.leftStick.y > 8 || controlData.leftStick.y < -8) {
-  //   joy1TargetVector.y = fastMap(controlData.leftStick.y, -127, 127, -100,
-  //   100); move = true;
-  // } else {
-  //   joy1TargetVector.y = 0;
-  //   move = false;
-  // }
-  // if (controlData.rightStick.x > 8 || controlData.rightStick.x < -8) {
-  //   joy2TargetVector.x =
-  //       fastMap(controlData.rightStick.x, -127, 127, -100, 100);
-  //   move = true;
-  // } else {
-  //   joy2TargetVector.x = 0;
-  //   move = false;
-  // }
-  // if (controlData.rightStick.y > 8 || controlData.rightStick.y < -8) {
-  //   joy2TargetVector.y =
-  //       fastMap(controlData.rightStick.y, -127, 127, -100, 100);
-  //   move = true;
-  // } else {
-  //   joy2TargetVector.y = 0;
-  //   move = false;
-  // }
+  // joy1TargetVector.x = fastMap(0, -127, 127, -100, 100);
+  // joy1TargetVector.y = fastMap(127, -127, 127, -100, 100);
+  // joy2TargetVector.x = fastMap(0, -127, 127, -100, 100);
+  // joy2TargetVector.y = fastMap(0, -127, 127, -100, 100);
 
   joy1TargetMagnitude =
       constrain(hypot(joy1TargetVector.x, joy1TargetVector.y), 0, 100);
@@ -378,18 +366,25 @@ void walkGait(ControllerData controlData, Gait currentGait) {
 
   // Serial.println("\n\n\n\n\n\n");
 
-  legs[1].footPosition =
-      getGaitCycle(currentGait, legs[1], joy1CurrentVector,
-                   joy1CurrentMagnitude, joy2CurrentVector, tArray[1]);
-  setServoPositions(legs[1].legNumber, inverseKinematics(legs[1].footPosition));
+  // legs[3].footPosition =
+  //     getGaitCycle(currentGait, legs[3], joy1CurrentVector,
+  //                  joy1CurrentMagnitude, joy2CurrentVector, tArray[3]);
+  // setServoPositions(legs[3].legNumber,
+  // inverseKinematics(legs[3].footPosition));
 
-  // for (int i = 0; i < NUM_LEGS; i++) { // Move each leg one gait cycle step
-  //   legs[i].footPosition =
-  //       getGaitCycle(currentGait, legs[i], joy1CurrentVector,
-  //                    joy1CurrentMagnitude, joy2CurrentVector, tArray[i]);
-  //   setServoPositions(legs[i].legNumber,
-  //                     inverseKinematics(legs[i].footPosition));
-  // }
+  // legs[4].footPosition =
+  //     getGaitCycle(currentGait, legs[4], joy1CurrentVector,
+  //                  joy1CurrentMagnitude, joy2CurrentVector, tArray[4]);
+  // setServoPositions(legs[4].legNumber,
+  // inverseKinematics(legs[4].footPosition));
+
+  for (int i = 0; i < NUM_LEGS; i++) { // Move each leg one gait cycle step
+    legs[i].footPosition =
+        getGaitCycle(currentGait, legs[i], joy1CurrentVector,
+                     joy1CurrentMagnitude, joy2CurrentVector, tArray[i]);
+    setServoPositions(legs[i].legNumber,
+                      inverseKinematics(legs[i].footPosition));
+  }
 
   // Serial.println(getGaitCycle(gait, legs[0]).toString());
 
@@ -423,7 +418,7 @@ Vector3 getGaitCycle(const Gait &gait, Legtype leg, Vector2 j1Vect, float j1Mag,
   if (t < gait.cycleRatio) { // Propelling phase
     if (legStates[leg.legNumber] != Propelling) {
       cycleStartPoints[leg.legNumber] = leg.footPosition;
-      Serial.println("\nPropelling: " + String(leg.legNumber));
+      // Serial.println("\nPropelling: " + String(leg.legNumber));
     }
     legStates[leg.legNumber] = Propelling;
 
@@ -442,7 +437,7 @@ Vector3 getGaitCycle(const Gait &gait, Legtype leg, Vector2 j1Vect, float j1Mag,
         Vector3(strafeStrideLength.x * strideMultiplier[leg.legNumber], // X
                 strafeStrideLength.y * strideMultiplier[leg.legNumber], // Y
                 0)                                                      // Z
-            .rotate(legAngle * -rotationMultiplier[leg.legNumber], gaitOrigin);
+            .rotate(legAngle * rotationMultiplier[leg.legNumber], Vector2());
 
     // Serial.println("Control Points: " + strafeControlPoints[0].toString() +
     //                " , " + strafeControlPoints[1].toString());
@@ -491,7 +486,7 @@ Vector3 getGaitCycle(const Gait &gait, Legtype leg, Vector2 j1Vect, float j1Mag,
   else {
     if (legStates[leg.legNumber] != Lifting) {
       cycleStartPoints[leg.legNumber] = leg.footPosition;
-      Serial.println("\nPropelling: " + String(leg.legNumber));
+      // Serial.println("\nPropelling: " + String(leg.legNumber));
     }
     legStates[leg.legNumber] = Lifting;
 
@@ -515,14 +510,14 @@ Vector3 getGaitCycle(const Gait &gait, Legtype leg, Vector2 j1Vect, float j1Mag,
                 (-strafeStrideLength.y) * strideMultiplier[leg.legNumber], // Y
                 legLandHeight                                              // Z
                 )
-            .rotate(legAngle * -rotationMultiplier[leg.legNumber], gaitOrigin);
+            .rotate(legAngle * rotationMultiplier[leg.legNumber], Vector2());
 
     // Ending point of the curve
     strafeControlPoints[3] =
         Vector3((-strafeStrideLength.x) * strideMultiplier[leg.legNumber], // X
                 (-strafeStrideLength.y) * strideMultiplier[leg.legNumber], // Y
                 0)                                                         // Z
-            .rotate(legAngle * -rotationMultiplier[leg.legNumber], gaitOrigin);
+            .rotate(legAngle * rotationMultiplier[leg.legNumber], Vector2());
 
     Vector3 straightPoint = GetPointOnBezierCurve(
         strafeControlPoints, fastMap(t, gait.cycleRatio, 1, 0, 1));
