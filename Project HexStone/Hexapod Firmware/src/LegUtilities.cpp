@@ -458,8 +458,8 @@ Vector3 getGaitCycle(const Gait &gait, Legtype leg, Vector2 j1Vect, float j1Mag,
     rotateControlPoints[1] = Vector3();
 
     // Ending point of the curve
-    rotateControlPoints[2] = Vector3(rotationAmount, // X
-                                     0,              // Y
+    rotateControlPoints[2] = Vector3(0, // X
+                                     rotationAmount,              // Y
                                      0);             // Z
 
     Vector3 rotatePoint = GetPointOnBezierCurve(
@@ -540,21 +540,21 @@ Vector3 getGaitCycle(const Gait &gait, Legtype leg, Vector2 j1Vect, float j1Mag,
 
     // Control point at the apex of the curve and offset away from the
     // hexapods body, cause the leg to lift up and away.
-    rotateControlPoints[2] = Vector3(gaitOrigin.x,                      // X
-                                     gaitOrigin.y + legLiftClearance,   // Y
+    rotateControlPoints[2] = Vector3(0,                                 // X
+                                     legLiftClearance,                  // Y
                                      gait.liftHeight * globalLiftFactor // Z
     );
 
     // Control point directly above the ending point preventing the leg from
     // running into the ground
-    rotateControlPoints[3] = Vector3(gaitOrigin.x,    // X
-                                     -rotationAmount, // Y
+    rotateControlPoints[3] = Vector3(0, // X
+                                     -rotationAmount,               // Y
                                      legLandHeight    // Z
     );
 
     // Ending point of the curve
-    rotateControlPoints[4] = Vector3(gaitOrigin.x,    // X
-                                     -rotationAmount, // Y
+    rotateControlPoints[4] = Vector3(0, // X
+                                     -rotationAmount,               // Y
                                      0                // Z
     );
 

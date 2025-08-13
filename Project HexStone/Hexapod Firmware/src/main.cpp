@@ -35,7 +35,7 @@ int liftHeight = 100;
 int stepLength = 100;
 
 // A multiplier for the global rotation of the hexapod
-const float globalRotationFactor = 0.1;
+const float globalRotationFactor = 0.5;
 
 // A multiplier for the global lift height of the hexapod
 const float globalLiftFactor = 0.8;
@@ -229,6 +229,8 @@ void setup() {
     legStates[i] = Reset; // Reset all leg states
     cycleProgress[i] = gait.offsets[i] * cycleResolution;
   }
+
+  assemblyModeDelay();
 }
 
 void loop() {
