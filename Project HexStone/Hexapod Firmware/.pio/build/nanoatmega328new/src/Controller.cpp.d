@@ -136,7 +136,4 @@
  C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
  .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/PS4Controller.h \
  .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/ps4.h \
- C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/bt/host/bluedroid/api/include/api/esp_bt_device.h \
- C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/bt/host/bluedroid/api/include/api/esp_bt_defs.h \
- C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/bt/host/bluedroid/api/include/api/esp_bt_main.h \
- C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/bt/host/bluedroid/api/include/api/esp_gap_bt_api.h
+ lib/ps5-esp32-main/src/ps5Controller.h lib/ps5-esp32-main/src/ps5.h

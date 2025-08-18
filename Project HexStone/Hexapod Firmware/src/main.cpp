@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <math.h>
+#include <ps5Controller.h>
 
 /****************************** Configuration  ******************************/
 
@@ -18,7 +19,7 @@ bool demoMode = true; // Demo mode flag to run a demo sequence
 const int cycleResolution = 1000;
 
 // The frequency of the main program
-const unsigned long programFrequency = 75;                   // (Hz)
+const unsigned long programFrequency = 100;                  // (Hz)
 const unsigned long waitPeriod = 1000000 / programFrequency; // (µs)
 unsigned long systemTime;
 unsigned long previousSystemTime = 0;
@@ -32,16 +33,16 @@ int chassisHeight = 100;
 int liftHeight = 100;
 
 // The step length of the hexapod
-int stepLength = 100;
+int stepLength = 125;
 
 // A multiplier for the global rotation of the hexapod
-const float globalRotationFactor = 0.5;
+const float globalRotationFactor = 0.8;
 
 // A multiplier for the global lift height of the hexapod
-const float globalLiftFactor = 0.8;
+const float globalLiftFactor = 1.0;
 
 // A multiplier for the global strafe of the hexapod
-const float globalStrideFactor = 0.1;
+const float globalStrideFactor = 0.2;
 
 // The landing height of each leg to prevent servo damage (Soft Land)
 const float legLandHeight = 25;
@@ -208,14 +209,16 @@ void setup() {
     legs[i].footPosition = gaitOrigin;
   }
 
-  if (doSerial) {
-    PS4.attachOnConnect(onConnect);
-    PS4.attachOnDisconnect(onDisConnect);
-  }
+  // if (doSerial) {
+  //   ps5.attachOnConnect(onConnect);
+  //   ps5.attachOnDisconnect(onDisConnect);
+  // }
 
-  // Initialize the PS4 controller
-  PS4.begin();
-  removePairedDevices(); // This helps to solve connection issues
+  // Initialize the ps5 controller
+  // ps5.begin();
+  // removePairedDevices(); // This helps to solve connection issues
+
+  ps5.begin("F8:9E:94:5D:F7:AE");
 
   // If we need to wait for the controller to connect, lock the servos for now
   if (needController) {
@@ -278,8 +281,9 @@ void loop() {
   //     delay(100);
   //   }
   // }
+  Serial.println(ps5.isConnected());
 
-  if (PS4.isConnected()) {
+  if (ps5.isConnected()) {
 
     ControllerData ctrl = getJoystickData();
     unsigned long now = millis();

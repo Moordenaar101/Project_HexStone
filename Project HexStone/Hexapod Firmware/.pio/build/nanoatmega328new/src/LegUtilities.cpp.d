@@ -137,6 +137,7 @@
  include/controller.h \
  .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/PS4Controller.h \
  .pio/libdeps/nanoatmega328new/PS4_Controller_Host/src/ps4.h \
+ lib/ps5-esp32-main/src/ps5Controller.h lib/ps5-esp32-main/src/ps5.h \
  .pio/libdeps/nanoatmega328new/Adafruit\ PWM\ Servo\ Driver\ Library/Adafruit_PWMServoDriver.h \
  .pio/libdeps/nanoatmega328new/Adafruit\ BusIO/Adafruit_I2CDevice.h \
  C:/Users/loggi/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src/Wire.h \

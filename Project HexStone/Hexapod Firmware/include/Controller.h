@@ -3,6 +3,7 @@
 #include "Utilities.h"
 #include <Arduino.h>
 #include <PS4Controller.h>
+#include <ps5Controller.h>
 
 // Macros used in the .cpp
 #define EVENTS 0
@@ -38,9 +39,9 @@ struct ControllerData {
 extern unsigned long lastTimeStamp;
 
 ControllerData getJoystickData();
-void removePairedDevices();
-void printDeviceAddress();
-void onConnect();
-void notify();
-void onDisConnect();
+// void removePairedDevices();
+// void printDeviceAddress();
+// void onConnect();
+// void notify();
+// void onDisConnect();
 bool inputDetected();
